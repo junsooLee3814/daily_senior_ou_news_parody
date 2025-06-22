@@ -1,0 +1,12 @@
+gspread
+oauth2client
+pandas
+Pillow
+python-dotenv
+anthropic
+google-generativeai
+emoji
+feedparser
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib 
