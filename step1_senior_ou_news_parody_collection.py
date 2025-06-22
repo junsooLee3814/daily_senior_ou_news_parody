@@ -197,13 +197,29 @@ def create_senior_parody_with_claude(news_item, existing_titles):
 
     messages = [{"role": "user", "content": parody_prompt}]
 
-    response = client.messages.create(
-        model="claude-3-5-sonnet-20240620",
-        max_tokens=2000,
-        temperature=0.8,
-        messages=messages
-    )
-    return response.content[0].text if response.content else ""
+    max_retries = 3
+    retry_delay = 5  # seconds
+    for attempt in range(max_retries):
+        try:
+            response = client.messages.create(
+                model="claude-3-5-sonnet-20240620",
+                max_tokens=2000,
+                temperature=0.8,
+                messages=messages
+            )
+            return response.content[0].text if response.content else ""
+        except anthropic.OverloadedError as e:
+            if attempt < max_retries - 1:
+                print(f"  - (경고) Claude AI가 과부하 상태입니다. {retry_delay}초 후 재시도합니다... ({attempt + 1}/{max_retries})")
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+            else:
+                print(f"  - (오류) Claude AI 과부하로 패러디 생성에 실패했습니다: {e}")
+                return ""
+        except Exception as e:
+            print(f"  - (오류) Claude AI 요청 중 예상치 못한 오류 발생: {e}")
+            return ""
+    return ""
 
 def save_results_to_gsheet(client, parody_data_list, spreadsheet_id, worksheet_name):
     """생성된 패러디 결과를 구글 시트에 저장합니다."""
@@ -282,26 +298,58 @@ def main():
             time.sleep(0.1) # 서버 부하 방지를 위한 약간의 딜레이
     print(f"  -> 총 {len(scraped_articles)}개 기사의 본문을 성공적으로 가져왔습니다.")
 
-    # 5. Claude AI로 패러디 생성
+    # 5. Claude AI를 사용하여 뉴스 패러디 생성
     print("\n[4/6] Claude AI를 사용하여 뉴스 패러디 생성 중...")
     parody_results = []
     existing_titles = []
-    for i, article in enumerate(scraped_articles):
-        print(f"  - 패러디 생성 중 ({i+1}/{len(scraped_articles)}): {article.get('title', '제목 없음')[:30]}...")
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_article = {executor.submit(create_senior_parody_with_claude, article, existing_titles): article for article in scraped_articles}
         
-        # 중복 방지를 위해 기존 생성된 제목 목록을 전달
-        parody_json_str = create_senior_parody_with_claude(article, existing_titles)
-        
-        try:
-            parody_data = json.loads(parody_json_str)
-            parody_data['original_title'] = article.get('title', '')
-            parody_data['original_link'] = article.get('original_link', '')
-            parody_results.append(parody_data)
-            existing_titles.append(parody_data.get('ou_title', '')) # 다음 요청을 위해 제목 추가
-        except json.JSONDecodeError:
-            print(f"  - (경고) Claude AI의 응답이 유효한 JSON이 아닙니다: {parody_json_str}")
-        except Exception as e:
-            print(f"  - (경고) 패러디 처리 중 알 수 없는 오류: {e}")
+        for i, future in enumerate(as_completed(future_to_article)):
+            article = future_to_article[future]
+            print(f"  - 패러디 생성 중 ({i+1}/{len(scraped_articles)}): {article['title'][:30]}...")
+            
+            try:
+                parody_json_str = future.result()
+                if not parody_json_str:
+                    continue
+
+                # Claude 응답에서 JSON 부분만 추출 (```json ... ``` 핸들링)
+                clean_str = parody_json_str.strip()
+                if clean_str.startswith("```json"):
+                    clean_str = clean_str[7:].strip()
+                if clean_str.endswith("```"):
+                    clean_str = clean_str[:-3].strip()
+                
+                try:
+                    parody_data = json.loads(clean_str)
+                    
+                    # 중복 및 유사도 검사
+                    is_duplicate = False
+                    if 'ou_title' in parody_data:
+                        current_title = parody_data['ou_title']
+                        for title in existing_titles:
+                            if SequenceMatcher(None, current_title, title).ratio() > 0.85:
+                                is_duplicate = True
+                                print(f"  - (경고) 유사한 제목이 이미 존재하여 건너뜁니다: {current_title}")
+                                break
+                        
+                        if not is_duplicate:
+                            parody_data['original_title'] = article['title']
+                            parody_data['original_link'] = article['url']
+                            parody_results.append(parody_data)
+                            existing_titles.append(current_title)
+                    else:
+                        print(f"  - (경고) 응답에 'ou_title'이 없어 건너뜁니다: {clean_str}")
+
+                except json.JSONDecodeError:
+                    print(f"  - (경고) Claude AI의 응답이 유효한 JSON이 아닙니다: {parody_json_str}")
+                    continue
+
+            except Exception as e:
+                print(f"  - (오류) 패러디 생성 작업 중 오류 발생: {article['title']}, {e}")
+
+    print(f"  -> 총 {len(parody_results)}개의 고유한 패러디를 생성했습니다.")
 
     # 6. 구글 시트에 결과 저장
     print("\n[5/6] 생성된 패러디 결과를 구글 시트에 저장 중...")
