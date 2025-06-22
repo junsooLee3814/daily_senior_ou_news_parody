@@ -1,7 +1,7 @@
 import os
 import feedparser
 from datetime import datetime, timedelta
-from anthropic import Anthropic
+from anthropic import Anthropic, OverloadedError
 from dotenv import load_dotenv
 from common_utils import get_gsheet, get_gspread_client
 from difflib import SequenceMatcher
@@ -208,7 +208,7 @@ def create_senior_parody_with_claude(news_item, existing_titles):
                 messages=messages
             )
             return response.content[0].text if response.content else ""
-        except anthropic.OverloadedError as e:
+        except OverloadedError as e:
             if attempt < max_retries - 1:
                 print(f"  - (경고) Claude AI가 과부하 상태입니다. {retry_delay}초 후 재시도합니다... ({attempt + 1}/{max_retries})")
                 time.sleep(retry_delay)
