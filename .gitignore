@@ -48,8 +48,4 @@ ENV/
 Thumbs.db
 
 # Generated output
-/parody_card/
-/parody_video/
 ou_parody_result.txt
-*.mp4
-*.png 
