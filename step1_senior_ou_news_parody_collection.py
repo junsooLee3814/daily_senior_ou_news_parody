@@ -1,7 +1,8 @@
 import os
 import feedparser
 from datetime import datetime, timedelta
-from anthropic import Anthropic, OverloadedError
+from anthropic import Anthropic
+from anthropic._exceptions import OverloadedError
 from dotenv import load_dotenv
 from common_utils import get_gsheet, get_gspread_client
 from difflib import SequenceMatcher
