@@ -2,61 +2,61 @@ name: Senior OU News Parody Video Generation
 
 on:
   schedule:
-    # 매일 오전 8시 30분 KST (전날 23:30 UTC)에 실행
+    # S'exécute tous les jours à 8h30 KST (23h30 UTC la veille)
     - cron: '30 23 * * *'
-  # 수동 실행을 위한 workflow_dispatch 추가
+  # Ajout de workflow_dispatch pour une exécution manuelle
   workflow_dispatch:
 
 jobs:
   generate_parody_video:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 코드 체크아웃 (LFS 포함)
+      - name: 📥 Récupération du code (LFS inclus)
         uses: actions/checkout@v4
         with:
           lfs: true
 
-      - name: 🐍 Python 환경 설정
+      - name: 🐍 Configuration de l'environnement Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11' # 로컬에서 테스트한 버전과 일치
+          python-version: '3.11' # Correspond à la version testée en local
 
-      - name: 🎬 FFmpeg 설치 (동영상 제작용)
+      - name: 🎬 Installation de FFmpeg (pour la création vidéo)
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
 
-      - name: 🐍 Python 패키지 설치
+      - name: 🐍 Installation des paquets Python
         run: pip install -r requirements.txt
 
-      - name: 🔑 구글 인증 정보 파일 생성
+      - name: 🔑 Création du fichier d'informations d'identification Google
         env:
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
         run: echo "$GOOGLE_CREDENTIALS_JSON" > service_account.json
 
-      - name: 🎯 시니어 뉴스 패러디 동영상 생성 실행
+      - name: 🎯 Exécution de la génération de la vidéo parodique Senior News
         env:
           CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
         run: python step4_senior_ou_news_parody_final.py
 
-      - name: 📤 생성된 파일 커밋 및 푸시
+      - name: 📤 Commit et push des fichiers générés
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # Git LFS로 동영상 파일 추적 설정
+          # Configuration du suivi des fichiers vidéo avec Git LFS
           git lfs track "parody_video/*.mp4"
           git add .gitattributes
           
-          # 생성된 동영상과 카드뉴스 이미지 추가
+          # Ajout de la vidéo et des images de la carte d'information générées
           git add parody_video/*.mp4
           git add parody_card/*.png
           
-          # 변경사항이 있을 경우에만 커밋 및 푸시
+          # Commit et push uniquement s'il y a des modifications
           if git diff --staged --quiet; then
-            echo "✅ 변경사항이 없습니다. 커밋을 건너뜁니다."
+            echo "✅ Aucune modification. Le commit est ignoré."
           else
-            echo "🚀 변경사항을 커밋하고 푸시합니다."
-            git commit -m "🎬 자동 생성: $(date '+%Y-%m-%d') 시니어 뉴스 패러디 동영상"
+            echo "🚀 Commit et push des modifications."
+            git commit -m "🎬 Génération automatique : $(date '+%Y-%m-%d') Vidéo parodique Senior News"
             git push
           fi 
