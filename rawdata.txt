@@ -1,0 +1,23 @@
+[연합뉴스RSS]
+https://www.yna.co.kr/rss/opinion.xml
+https://www.yna.co.kr/rss/health.xml
+https://www.yna.co.kr/rss/market.xml
+https://www.yna.co.kr/rss/politics.xml
+https://www.yna.co.kr/rss/economy.xml
+https://www.yna.co.kr/rss/local.xml
+
+
+[패러디디저장_스프레드시트_ID]
+패러디결과_스프레드시트_ID: 1yZeYdyGZpR6yrRn5JNa1-JdQtO9vKLX6NPWhqpmT6kw
+
+[카드뉴스개수]
+카드뉴스_개수: 30
+
+[쿠팡파트너스 대가성문구]
+쿠팡파트너스_대가성문구: 이 포스팅은 쿠팡파트너스 활동으로 일정보수를 지급받습니다. 위 이달의 추천상품 이용하세요.
+
+[쿠팡파트너스]
+쿠팡파트너스_링크: https://link.coupang.com/a/ctQSUu
+
+[동영상길이]
+동영상_길이:7초
