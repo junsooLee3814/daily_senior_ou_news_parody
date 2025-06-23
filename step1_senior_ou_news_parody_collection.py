@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from anthropic import Anthropic
 from anthropic._exceptions import OverloadedError
 from dotenv import load_dotenv
-from common_utils import get_gsheet, get_gspread_client
+from common_utils import get_gsheet, get_gspread_client, get_kst_now
 from difflib import SequenceMatcher
 import json
 import re
@@ -173,8 +173,12 @@ def create_senior_parody_with_claude(news_item, existing_titles):
 ## 🎨 **세부 제작 가이드라인**
 
 ### **[ou_title] 작성법 (50자 이내):**
-- **강력한 후킹**: "경악", "속보", "충격", "깜놀", "대박", "헉!", "진짜?", "미쳤다", "세상에" 등 매번 다른 강력한 후킹 문구를 창의적으로 사용하세요. **"충격!!"만 반복하지 마세요.**
-- **핵심 찌르기**: 뉴스 본문의 핵심 내용을 한 문장으로 꿰뚫는 질문이나 감탄사를 사용하세요. (예: "이걸 이제 와서 한다고??")
+- **짧고 임팩트 있는 후킹 문구 사용**: 기존의 "충격", "경악" 같은 단조로운 표현 대신, 아래 예시처럼 짧고 현실적인 후킹 문구를 창의적으로 조합하여 제목을 만드세요.
+- **감탄형**: "이게 맞나?", "말이 되나?", "세상에나...", "어이없네"
+- **현실형**: "결국 우리만", "또 서민만", "역시나", "뻔한 수순"
+- **세대형**: "요즘 세상", "우리 때는", "젊은 애들", "옛날 같으면"
+- **실감형**: "체감 100%", "현실 직격탄", "솔직 후기", "진짜 이유"
+- **뉴스 핵심과 연결**: 후킹 문구를 뉴스 핵심 내용과 자연스럽게 연결하세요. (예: "AI 일자리 뺏는다는데... 말이 되나?", "트럼프 관세 올린다면서... 결국 우리만 손해", "양자컴퓨터 나왔다는데... 요즘 세상 따라가기 힘들어")
 
 ### **[라떼] 작성법 (100자 이내):**
 - **"우리 때는..."**: 본문 내용과 관련된 과거 경험을 현재와 비교하며 세대 공감을 유도하세요. (예: "우리 때는 주판알 튀기던 게 AI 계산기가 됐네...")
@@ -223,22 +227,24 @@ def create_senior_parody_with_claude(news_item, existing_titles):
     return ""
 
 def save_results_to_gsheet(client, parody_data_list, spreadsheet_id, worksheet_name):
-    """생성된 패러디 결과를 구글 시트에 저장합니다."""
+    """생성된 패러디 결과를 구글 시트에 누적하여 저장합니다."""
     try:
         spreadsheet = client.open_by_key(spreadsheet_id)
         try:
             worksheet = spreadsheet.worksheet(worksheet_name)
-            worksheet.clear()
-            print(f"  - 기존 워크시트 '{worksheet_name}'의 내용을 삭제했습니다.")
         except gspread.WorksheetNotFound:
-            worksheet = spreadsheet.add_worksheet(title=worksheet_name, rows=len(parody_data_list) + 10, cols=20)
+            # 워크시트가 없으면 새로 만듭니다.
+            worksheet = spreadsheet.add_worksheet(title=worksheet_name, rows=1, cols=20)
             print(f"  - 새 워크시트 '{worksheet_name}'를 생성했습니다.")
-        
-        headers = ['today', 'ou_title', 'original_title', 'latte', 'ou_think', 'disclaimer', 'source_url']
-        worksheet.append_row(headers)
+
+        # 시트가 비어있는지 확인하고, 비어있다면 헤더 추가
+        if not worksheet.get_all_values():
+            headers = ['today', 'ou_title', 'original_title', 'latte', 'ou_think', 'disclaimer', 'source_url']
+            worksheet.append_row(headers)
+            print("  - 시트가 비어있어 헤더를 추가합니다.")
         
         rows_to_upload = []
-        today_str = datetime.now().strftime('%Y-%m-%d, %a').lower()
+        today_str = get_kst_now().strftime('%Y-%m-%d, %a').lower()
 
         for p_data in parody_data_list:
             row = [
@@ -251,9 +257,12 @@ def save_results_to_gsheet(client, parody_data_list, spreadsheet_id, worksheet_n
                 p_data.get('original_link', '')
             ]
             rows_to_upload.append(row)
-            
-        worksheet.append_rows(rows_to_upload)
-        print(f"  -> 구글 시트 '{worksheet_name}'에 {len(rows_to_upload)}개 데이터 저장 완료!")
+        
+        if rows_to_upload:
+            worksheet.append_rows(rows_to_upload)
+            print(f"  -> 구글 시트 '{worksheet_name}'에 {len(rows_to_upload)}개 데이터 추가 저장 완료!")
+        else:
+            print("  -> 구글 시트에 추가할 데이터가 없습니다.")
 
     except Exception as e:
         print(f"  ! 구글 시트 저장 중 오류 발생: {e}")

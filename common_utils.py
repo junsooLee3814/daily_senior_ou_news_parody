@@ -4,6 +4,8 @@ import os
 from dotenv import load_dotenv
 import json
 import traceback
+from datetime import datetime
+import pytz
 
 # .env 파일에서 환경 변수를 로드
 load_dotenv()
@@ -15,6 +17,10 @@ SCOPE = [
     "https://www.googleapis.com/auth/drive",
 ]
 CREDS_FILE = "service_account.json"
+
+def get_kst_now():
+    """한국 표준시(KST) 기준의 현재 시간을 반환합니다."""
+    return datetime.now(pytz.timezone('Asia/Seoul'))
 
 def get_gspread_client():
     """gspread 클라이언트를 인증하고 반환합니다."""

@@ -2,9 +2,10 @@ import os
 import glob
 from PIL import Image, ImageDraw, ImageFont
 import pandas as pd
-from common_utils import get_gspread_client
+from common_utils import get_gspread_client, get_kst_now
 from pathlib import Path
 import gspread
+from datetime import datetime
 
 # --- 기본 설정 ---
 # 스크립트 파일의 현재 위치를 기준으로 절대 경로 생성
@@ -129,7 +130,7 @@ try:
     worksheet = spreadsheet.worksheet(WRITE_SHEET_NAME)
     data = worksheet.get_all_records()
     df = pd.DataFrame(data)
-    print(f"✅ 데이터 로드 완료. 총 {len(df)}개.")
+    print(f"✅ 구글 시트에서 전체 데이터 로드 완료. 총 {len(df)}개.")
 except Exception as e:
     print(f"❌ 구글 시트 데이터 로드 실패: {e}")
     df = pd.DataFrame()
@@ -137,6 +138,19 @@ except Exception as e:
 if df.empty:
     print("처리할 데이터가 없습니다. 프로그램을 종료합니다.")
     exit()
+
+# --- 오늘 날짜 데이터만 필터링 ---
+today_str = get_kst_now().strftime('%Y-%m-%d, %a').lower()
+print(f"-> 오늘 날짜({today_str})에 해당하는 데이터만 필터링합니다...")
+df = df[df['today'] == today_str].copy()
+
+if df.empty:
+    print("   - 오늘 생성된 새 패러디가 없습니다. 카드 생성을 건너뜁니다.")
+    exit()
+
+# 인덱스를 리셋하여 0부터 시작하도록 함
+df.reset_index(drop=True, inplace=True)
+print(f"   -> 오늘 생성할 카드 뉴스 {len(df)}개를 찾았습니다.")
 
 # 출력 폴더 생성 및 정리
 output_dir = SCRIPT_DIR / 'parody_card'

@@ -16,6 +16,7 @@ from datetime import datetime
 import shutil
 import re
 import time
+from common_utils import get_kst_now
 
 def parse_rawdata(file_path='asset/rawdata.txt'):
     """rawdata.txt 파일을 파싱하여 설정값을 딕셔너리로 반환합니다."""
@@ -49,7 +50,7 @@ INTRO_DURATION = 2 # 인트로 이미지의 노출 시간 (초)
 WIDTH, HEIGHT = 1920, 1080 # 동영상 해상도 (가로 영상에 맞게 수정)
 
 # --- 경로 설정 ---
-now_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+now_str = get_kst_now().strftime('%Y%m%d_%H%M%S')
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 CARD_IMG_DIR = os.path.join(BASE_DIR, 'parody_card')

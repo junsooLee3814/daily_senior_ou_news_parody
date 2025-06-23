@@ -2,6 +2,7 @@ import subprocess
 import sys
 import os
 from datetime import datetime
+from common_utils import get_kst_now
 
 def run_script(script_name):
     """지정된 파이썬 스크립트를 실행하고 성공 여부를 반환합니다."""
@@ -55,7 +56,7 @@ def run_script(script_name):
 
 def main():
     """전체 패러디 뉴스 생성 파이프라인을 실행합니다."""
-    start_time = datetime.now()
+    start_time = get_kst_now()
     print(f"=== O_U Stock Parody 자동 생성 파이프라인 시작 ({start_time.strftime('%Y-%m-%d %H:%M:%S')}) ===")
     
     # --- parody_video 폴더의 .mp4 파일 삭제 ---
@@ -84,7 +85,7 @@ def main():
             print(f"\n[파이프라인 중단] '{script}' 실행에 실패하여 이후 단계를 중단합니다.")
             break
     
-    end_time = datetime.now()
+    end_time = get_kst_now()
     print("\n" + "="*50)
     print(f"=== O_U Stock Parody 자동 생성 파이프라인 종료 ({end_time.strftime('%Y-%m-%d %H:%M:%S')}) ===")
     print(f"총 소요 시간: {end_time - start_time}")
