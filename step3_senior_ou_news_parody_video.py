@@ -187,6 +187,18 @@ def cleanup(temp_dirs, temp_files):
                 print(f"[경고] 임시 파일({f})을 자동으로 삭제하지 못했습니다: {e}")
 
 if __name__ == "__main__":
+    # --- 시작 전, 이전 최종 동영상 파일 삭제 ---
+    if os.path.exists(VIDEO_OUT_DIR):
+        for file in glob.glob(os.path.join(VIDEO_OUT_DIR, '*.mp4')):
+            # single_clips 폴더 안의 파일은 삭제하지 않도록 예외 처리
+            if 'single_clips' not in os.path.dirname(file):
+                 try:
+                    os.remove(file)
+                    print(f"[이전 파일 삭제] {file}")
+                 except OSError as e:
+                    print(f"[오류] 파일 삭제 실패: {file} ({e})")
+    # ------------------------------------
+
     # parody_card 폴더에서 이미지 목록 가져오기 (이름순 정렬)
     card_images = sorted(glob.glob(os.path.join(CARD_IMG_DIR, '*.png')))
     
