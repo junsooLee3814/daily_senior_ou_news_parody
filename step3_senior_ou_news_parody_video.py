@@ -73,7 +73,7 @@ def create_intro_video(img_path, out_path, duration):
     if not os.path.exists(img_path):
         print(f"[오류] 인트로 이미지 파일 없음: {img_path}")
         return None
-    
+
     print("1. 인트로 영상 제작 중...")
     cmd = [
         "ffmpeg", "-y", "-loop", "1", "-i", img_path,
@@ -119,7 +119,7 @@ def merge_videos(video_paths, out_path):
     with open(list_file_path, "w", encoding="utf-8") as f:
         for v_path in video_paths:
             f.write(f"file '{os.path.abspath(v_path)}'\n")
-    
+
     cmd = [
         "ffmpeg", "-y", "-f", "concat", "-safe", "0",
         "-i", list_file_path, "-c", "copy", out_path
@@ -165,7 +165,7 @@ def cleanup(temp_dirs, temp_files):
     for d in temp_dirs:
         if not os.path.exists(d):
             continue
-        
+
         for i in range(3): # 최대 3번 재시도
             try:
                 shutil.rmtree(d)
@@ -192,36 +192,36 @@ if __name__ == "__main__":
         for file in glob.glob(os.path.join(VIDEO_OUT_DIR, '*.mp4')):
             # single_clips 폴더 안의 파일은 삭제하지 않도록 예외 처리
             if 'single_clips' not in os.path.dirname(file):
-                 try:
+                try:
                     os.remove(file)
                     print(f"[이전 파일 삭제] {file}")
-                 except OSError as e:
+                except OSError as e:
                     print(f"[오류] 파일 삭제 실패: {file} ({e})")
     # ------------------------------------
 
     # parody_card 폴더에서 이미지 목록 가져오기 (이름순 정렬)
     card_images = sorted(glob.glob(os.path.join(CARD_IMG_DIR, '*.png')))
-    
+
     if not card_images:
         print("[오류] 'parody_card' 폴더에 이미지 파일이 없습니다. 스크립트를 종료합니다.")
     else:
         # 1. 인트로 영상 생성
         intro_clip = create_intro_video(INTRO_IMG_PATH, INTRO_CLIP_PATH, INTRO_DURATION)
-        
+
         # 2. 카드 영상 생성
         card_clips = create_card_videos(card_images, CARD_DURATION)
-        
+
         # 3. 모든 클립 목록 결합 (인트로 + 카드)
         all_clips = ([intro_clip] if intro_clip else []) + card_clips
-        
+
         if all_clips:
             # 4. 클립 합치기
             merge_videos(all_clips, MERGED_CLIP_PATH)
-            
+
             # 5. BGM 추가
             total_video_duration = (INTRO_DURATION if intro_clip else 0) + (len(card_clips) * CARD_DURATION)
             add_background_music(MERGED_CLIP_PATH, BGM_PATH, FINAL_VIDEO_PATH, total_video_duration)
-            
+
             # 6. 임시 파일 정리
             cleanup(
                 temp_dirs=[SINGLE_CLIP_DIR],
