@@ -240,90 +240,119 @@ def create_senior_parody_with_claude(news_item: Dict[str, Any], existing_titles:
     else:
         existing_titles_str = "없음"
 
-    # 50/60/70대 타겟으로 프롬프트 수정
-    parody_prompt = f"""# 🚀 조회수 폭발을 위한 시니어 뉴스 패러디 제작
+    # 프롬프트 생성
+    parody_prompt = f"""# 🚀 조회수 1000만뷰 돌파를 위한 시니어 뉴스 패러디 제작
 
 ## 🎯 미션
-당신은 50/60/70대가 "이거 진짜 맞는 말이네!"하며 가족 단톡방에 공유하고 싶어지는 뉴스 패러디를 만드는 AI입니다.
+당신은 50/60/70대가 "어? 이거 진짜네!"하며 속으로 무릎을 탁 치고, 가족 단톡방에 "이거 봐라" 하며 올리고 싶어지는 뉴스 패러디를 만드는 천재 AI입니다.
 
-## 타겟 특성
-- **연령**: 50/60/70대 (베이비부머 세대 중심)
-- **직업**: 은퇴자, 자영업자, 직장인 후배, 전업주부
-- **관심사**: 연금/건강/자녀걱정/물가/노후준비
-- **성향**: "요즘 세상 참 이상해졌다", "우리 때는 그런 게 아니었는데" 스타일
+## 🔥 조회수 폭발 타겟 분석
+- **핵심 연령**: 50/60/70대 + 그들 자녀(30-40대)도 함께 보는 콘텐츠
+- **직업**: 은퇴자, 소상공인, 중소기업 직장인, 전업주부
+- **핵심 감정**: 억울함, 불안감, 현실 한탄, 미래 걱정
+- **관심사**: 연금/의료비/물가/부동산/자녀교육비/노후준비
+- **성향**: "세상이 왜 이렇게 됐나", "정말 답답하다", "우리만 손해"
 
-## 핵심 전략: "할아버지가 신문 보며 혀 차는 그 느낌"
+## 🎬 YouTube 알고리즘 공략 전략
 
-### 1. ou_title 제작 원칙 (35자 이내)
-**목표**: 1초 안에 "아 맞네" 하고 클릭하게 만들기
+### 1. ou_title 제작 원칙 (30자 이내로 단축)
+**목표**: 3초 내 클릭 유도 + 충격적이면서도 현실적
 
-**A타입 - 라떼형**: "[뉴스 팩트]... 옛날엔 말이야"
-- "연금 68세부터 준다네... 옛날엔 55세였는데"
-- "김밥 5천원이라고? 옛날엔 500원이었는데"
-- "대통령 지지율 20%... 옛날 같으면 벌써 물러났지"
+**SSS급 패턴 - 숫자 + 충격**:
+- "연금 68세까지? 말도 안 되네"
+- "김밥 5천원... 미쳤나 진짜"
+- "의료비 월 50만원? 어떻게 살라고"
+- "전기료 30% 인상... 겨울 어쩌나"
 
-**B타입 - 현실탄식형**: "[충격 팩트] + 세상 참 살기 힘들어졌네"
-- "의료비 또 올랐다네... 세상 참 살기 힘들어"
-- "전기료 20% 인상... 겨울에 어쩌라고"
-- "집값 또 뛰었다는데... 우리 애들은 언제 사나"
+**SS급 패턴 - 비교 + 현실**:
+- "옛날 쌀값 vs 지금... 기가 막혀"
+- "20년 전 등록금 vs 지금... 충격"
+- "우리 때 월급 vs 지금... 답없네"
 
-**C타입 - 걱정형**: "[뉴스] + 우리 아이들은 어쩌나"
-- "AI가 일자리 뺏는다는데... 우리 아들은 뭐하나"
-- "결혼 안 하는 젊은이들... 손자는 언제 보나"
-- "출산율 0.7명... 나라 꼴이 이게 뭐야"
+**S급 패턴 - 걱정 + 호소**:
+- "내 아들 취업... 정말 안 되네"
+- "손자 태어날까... 출산율 0.7명"
+- "집값 이렇게 오르면... 절망적"
 
-**D타입 - 분노형**: "[뉴스] + 서민만 호구네"
-- "또 세금 올린다네... 서민만 호구 취급"
-- "국회의원 세비 인상... 자기들만 챙기네"
-- "공무원 연금은 그대로... 불공평하네 참"
+**A급 패턴 - 분노 + 현실**:
+- "세금만 올리고... 서민은 뭐야"
+- "공무원 연금은 그대로... 불공평"
+- "국회의원들만 좋네... 화난다"
 
-### 2. latte 작성법 (80자 이내)
-**목표**: 과거 경험담으로 공감대 폭발
-- "우리 젊을 때는 [구체적 과거 상황]이었는데, 요즘은 [현재 상황]이니..."
-- 구체적 금액이나 시기 활용
-- "그때는", "예전엔", "우리 때는" 필수 사용
+### 2. latte 작성법 (100자 이내로 확장)
+**목표**: 과거 경험담으로 강력한 공감대 형성
+- 구체적 숫자와 비교로 충격 증대
+- "그땐 이랬는데 지금은..." 극명한 대비
+- 감정 이입할 수 있는 디테일 추가
 
-**예시**:
-- "우리 젊을 때는 대학등록금이 한 학기에 30만원이었는데, 요즘은 500만원이라니 기가 막혀"
-- "예전엔 쌀 한 가마에 2만원이면 샀는데, 지금은 10만원도 넘네 참"
-
-### 3. ou_think 작성법 (60자 이내)
-**목표**: 50/60/70대 속마음 솔직하게 표현
-- 노후 불안, 자녀 걱정, 건강 걱정, 경제적 부담
-- "우리만 손해", "나라가 이 꼴", "애들이 걱정"
-- 감정 표현: 참..., 에휴..., 정말..., 어이없네
+**황금 공식**:
+"우리 [구체적 시기]에는 [구체적 가격/상황]이었는데, 지금은 [현재 상황]이니까 [감정표현]"
 
 **예시**:
-- "연금도 줄이고 의료비는 올리고... 노인들 죽으라는 거야?"
-- "애들 미래가 걱정되네... 이런 세상에서 어떻게 살라고"
-- "열심히 살아온 세대가 이런 대접 받나... 참 서글프다"
+- "우리 80년대엔 짜장면이 100원, 버스비가 20원이었는데 지금은 짜장면 8천원에 버스비 1500원이니 정말 기가 막혀서"
+- "예전엔 대학 등록금이 한 학기 20만원이었는데 지금은 500만원 넘는다니까 내 손자는 어떻게 대학 보내나 싶어서"
+
+### 3. ou_think 작성법 (80자 이내로 확장)
+**목표**: 50/60/70대의 현실적 속마음을 직격탄으로
+- 더 솔직하고 날것의 감정 표현
+- 구체적 걱정과 불안 명시
+- "진짜", "정말", "도대체" 등 강조 부사 활용
+
+**핵심 감정 카테고리**:
+1. **경제적 불안**: "돈 없으면 늙어서 어떻게 살라고..."
+2. **자녀 걱정**: "내 아들딸이 이런 세상에서 어떻게 살아가나..."
+3. **분노**: "열심히 살아온 우리 세대만 호구 취급하나..."
+4. **절망**: "이런 식으로 가면 나라가 어떻게 되나..."
+
+**예시**:
+- "연금도 못 받고 의료비는 천정부지로 올라서... 정말 늙어서 어떻게 살라고 그러나"
+- "내 아들이 결혼도 못하고 집도 못 사는데... 나라 꼴이 이게 뭐야 정말"
+
+## 🎯 YouTube 썸네일 고려사항
+제목이 썸네일에서 강력한 임팩트를 줄 수 있도록:
+- 충격적 숫자나 비교 표현 우선
+- "?" "!" 느낌표로 감정 극대화
+- 짧고 굵게 핵심만 전달
+
+## 💡 바이럴 요소 강화
+1. **세대 공감**: 모든 50/60/70대가 경험한 공통 상황
+2. **현실 직격**: 피부에 와 닿는 구체적 문제
+3. **감정 폭발**: 억울함, 분노, 걱정을 적나라하게
+4. **공유 욕구**: "이거 우리 애들도 봐야 해" 심리 자극
 
 ## 중요: 응답 형식
 반드시 아래 JSON 형식으로만 응답하세요. 다른 설명이나 텍스트는 일절 포함하지 마세요.
 
 {{
-  "ou_title": "35자 이내 제목",
-  "latte": "80자 이내 라떼 이야기", 
-  "ou_think": "60자 이내 현실 토로"
+  "ou_title": "30자 이내 제목",
+  "latte": "100자 이내 라떼 이야기", 
+  "ou_think": "80자 이내 현실 토로"
 }}
 
 ## 뉴스 분석
 - **제목**: {news_title}
 - **내용**: {news_summary[:800]}
 
-## 금지사항
+## ⚠️ 절대 금지사항
 - 이모지 사용 금지
 - 젊은 세대 용어 사용 금지 (대박, 쩐다, 핵 등)
-- 정치적 편향성 강한 표현 금지
-- 35자 이상의 긴 제목 금지
+- 지나치게 정치적 편향성 강한 표현 금지
+- 30자 이상의 긴 제목 금지
 - JSON 외의 다른 텍스트 절대 금지
+- 가짜뉴스나 과도한 선동 금지
 
-## 중복 방지
+## 🔄 중복 방지
 이미 생성된 제목들과 중복되지 않게 새롭고 창의적으로 만드세요:
 {existing_titles_str}
+
+## 🎪 최종 체크리스트
+✅ 제목이 3초 내 클릭을 유도하는가?
+✅ 50/60/70대가 "맞네!"하고 공감할까?
+✅ 가족 단톡방에 올리고 싶을까?
+✅ 감정적 임팩트가 강한가?
+✅ 구체적이고 현실적인가?
 """
 
-    # 타입 힌트 수정: MessageParam 사용
     from anthropic.types import MessageParam
     messages: List[MessageParam] = [
         {"role": "user", "content": parody_prompt}
@@ -331,34 +360,32 @@ def create_senior_parody_with_claude(news_item: Dict[str, Any], existing_titles:
 
     max_retries = 3
     retry_delay = 5  # seconds
-    
+
     for attempt in range(max_retries):
         try:
             response = client.messages.create(
-                model="claude-3-haiku-20240307",
+                model="claude-3-5-sonnet-20241022",
                 max_tokens=2000,  # 1500에서 2000으로 증가
                 temperature=0.8,
                 messages=messages
             )
-            
-            # 응답 처리 개선
+
             response_text = ""
             if response.content:
                 first_content = response.content[0]
-                # TextBlock 객체 처리
                 if hasattr(first_content, 'text') and hasattr(first_content, 'type') and first_content.type == 'text':
                     response_text = first_content.text
                 elif isinstance(first_content, dict) and 'text' in first_content:
                     response_text = first_content['text']
                 else:
                     response_text = str(first_content)
-            
+
             if not response_text:
                 logger.warning("Claude 응답이 비어있습니다. 재시도합니다.")
                 continue
-                
+
             return response_text
-            
+
         except (APIError, OverloadedError) as e:
             error_message = str(e)
             if 'credit balance is too low' in error_message:
@@ -379,13 +406,6 @@ def create_senior_parody_with_claude(news_item: Dict[str, Any], existing_titles:
                     return ""
             else:
                 logger.error(f"Claude API 오류: {e}")
-                return ""
-            if attempt < max_retries - 1:
-                logger.warning(f"Claude AI가 과부하 상태입니다. {retry_delay}초 후 재시도... ({attempt + 1}/{max_retries})")
-                time.sleep(retry_delay)
-                retry_delay *= 2  # Exponential backoff
-            else:
-                logger.error(f"Claude AI 과부하로 패러디 생성에 실패했습니다: {e}")
                 return ""
         except Exception as e:
             logger.error(f"Claude AI 요청 중 예상치 못한 오류 발생: {e}")
@@ -465,54 +485,27 @@ def main():
         return
     
     # 3. 뉴스 중요도 평가 및 선택
-    card_count = config.get('카드뉴스_개수', 30)
-    if isinstance(card_count, str):
-        try:
-            card_count = int(card_count)
-        except ValueError:
-            card_count = 30
-    elif isinstance(card_count, list):
-        card_count = 30
+    # 충분히 많은 후보군 확보 (예: 100개)
+    candidate_count = 100
+    sorted_news = rank_and_select_news(all_news_entries, candidate_count)
     
-    # 30개 기사 처리
-    card_count = min(card_count, 30)
-    
-    selected_news = rank_and_select_news(all_news_entries, card_count)
-    
-    # 4. 선택된 뉴스의 본문 스크래핑
-    logger.info("선택된 뉴스의 전체 본문 스크래핑 중...")
-    scraped_articles = []
-    with ThreadPoolExecutor(max_workers=5) as executor:  # 10에서 5로 줄임
-        future_to_url = {executor.submit(get_article_content, news.get('link', '')): news for news in selected_news}
-        for future in as_completed(future_to_url):
-            result = future.result()
-            if result and result['text']:
-                original_news_item = future_to_url[future]
-                result['source_rss'] = original_news_item.get('source_rss')
-                result['original_link'] = original_news_item.get('link', '')
-                scraped_articles.append(result)
-                logger.info(f"스크래핑 완료: {result['title'][:30]}...")
-            time.sleep(0.2) # 서버 부하 방지를 위한 딜레이 증가
-    
-    logger.info(f"총 {len(scraped_articles)}개 기사의 본문을 성공적으로 가져왔습니다.")
-
-    if not scraped_articles:
-        logger.error("스크래핑된 기사가 없습니다.")
-        return
-
-    # 5. Claude AI를 사용하여 뉴스 패러디 생성
-    logger.info("Claude AI를 사용하여 뉴스 패러디 생성 중...")
+    # 4. 최소 30개 패러디가 나올 때까지 반복
+    logger.info("최소 30개 패러디가 나올 때까지 반복 생성...")
     parody_results = []
     existing_titles = []
-    
-    # API 호출 실패 카운터
+    max_needed = 30
     api_failures = 0
-    max_failures = 5  # 연속 5회 실패시 중단
+    max_failures = 5
     
-    # 순차 처리로 변경 (병렬 처리시 existing_titles 동기화 문제 방지)
-    for i, article in enumerate(scraped_articles):
-        logger.info(f"패러디 생성 중 ({i+1}/{len(scraped_articles)}): {article['title'][:30]}...")
+    for news in sorted_news:
+        # 본문 스크래핑
+        article = get_article_content(news.get('link', ''))
+        if not article or not article.get('text'):
+            continue
+        article['source_rss'] = news.get('source_rss')
+        article['original_link'] = news.get('link', '')
         
+        # Claude 패러디 생성
         try:
             parody_response = create_senior_parody_with_claude(article, existing_titles)
             if not parody_response:
@@ -523,61 +516,46 @@ def main():
                     break
                 continue
 
-            # 강화된 JSON 파싱
             clean_str = parody_response.strip()
-            
-            # ```json 또는 ``` 제거
             if clean_str.startswith("```json"):
                 clean_str = clean_str[7:].strip()
             elif clean_str.startswith("```"):
                 clean_str = clean_str[3:].strip()
             if clean_str.endswith("```"):
                 clean_str = clean_str[:-3].strip()
-            
-            # 불필요한 설명 텍스트 제거 (JSON만 추출)
             json_start = clean_str.find('{')
             json_end = clean_str.rfind('}')
             if json_start != -1 and json_end != -1 and json_end > json_start:
                 clean_str = clean_str[json_start:json_end+1]
-            
-            # 문자열 정리
             clean_str = re.sub(r'\s+', ' ', clean_str).strip()
-            
             try:
                 parody_data = json.loads(clean_str)
-                
-                # 필수 키 확인
                 if 'ou_title' not in parody_data:
                     logger.warning("'ou_title' 키가 없어 건너뜁니다.")
                     continue
-                
-                # 중복 및 유사도 검사
                 current_title = parody_data['ou_title']
                 is_duplicate = False
-                
                 for title in existing_titles:
                     if SequenceMatcher(None, current_title, title).ratio() > 0.85:
                         is_duplicate = True
                         logger.warning(f"유사한 제목이 이미 존재하여 건너뜁니다: {current_title}")
                         break
-                
                 if not is_duplicate:
                     parody_data['original_title'] = article['title']
                     parody_data['original_link'] = article['url']
                     parody_results.append(parody_data)
                     existing_titles.append(current_title)
                     logger.info(f"✅ 패러디 생성 성공: {current_title}")
-                    api_failures = 0  # 성공시 실패 카운터 리셋
-                
+                    api_failures = 0
             except json.JSONDecodeError as e:
                 logger.warning(f"JSON 파싱 실패: {e}")
                 logger.warning(f"정리된 응답: {clean_str[:100]}...")
                 continue
-
         except Exception as e:
             logger.error(f"패러디 생성 중 오류 발생: {e}")
             continue
-
+        if len(parody_results) >= max_needed:
+            break
     logger.info(f"총 {len(parody_results)}개의 고유한 패러디를 생성했습니다.")
 
     # 6. 구글 시트에 결과 저장

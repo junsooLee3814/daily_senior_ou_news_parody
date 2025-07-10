@@ -65,6 +65,7 @@ INTRO_IMG_PATH = os.path.join(BASE_DIR, 'asset', 'intro_senior_ou_news-parody.pn
 BGM_PATH = os.path.join(BASE_DIR, 'asset', 'bgm.mp3')
 
 INTRO_CLIP_PATH = os.path.join(SINGLE_CLIP_DIR, f'intro_clip_{now_str}.mp4')
+FINAL_INTRO_CLIP_PATH = os.path.join(SINGLE_CLIP_DIR, f'final_intro_clip_{now_str}.mp4')
 MERGED_CLIP_PATH = os.path.join(VIDEO_OUT_DIR, f'merged_senior_ou_news_parody_{now_str}.mp4')
 FINAL_VIDEO_PATH = os.path.join(VIDEO_OUT_DIR, f'senior_ou_news_parody_{now_str}.mp4')
 
@@ -209,24 +210,24 @@ if __name__ == "__main__":
     if not card_images:
         print("[오류] 'parody_card' 폴더에 이미지 파일이 없습니다. 스크립트를 종료합니다.", flush=True)
     else:
-        # 1. 인트로 영상 생성
+        # 1. 인트로 영상 생성 (앞)
         intro_clip = create_intro_video(INTRO_IMG_PATH, INTRO_CLIP_PATH, INTRO_DURATION)
-
         # 2. 카드 영상 생성
         card_clips = create_card_videos(card_images, CARD_DURATION)
-
-        # 3. 모든 클립 목록 결합 (인트로 + 카드)
-        all_clips = ([intro_clip] if intro_clip else []) + card_clips
+        # 3. 인트로 영상 생성 (뒤)
+        final_intro_clip = create_intro_video(INTRO_IMG_PATH, FINAL_INTRO_CLIP_PATH, INTRO_DURATION)
+        # 4. 모든 클립 목록 결합 (인트로 + 카드 + 인트로)
+        all_clips = ([intro_clip] if intro_clip else []) + card_clips + ([final_intro_clip] if final_intro_clip else [])
 
         if all_clips:
-            # 4. 클립 합치기
+            # 5. 클립 합치기
             merge_videos(all_clips, MERGED_CLIP_PATH)
 
-            # 5. BGM 추가
-            total_video_duration = (INTRO_DURATION if intro_clip else 0) + (len(card_clips) * CARD_DURATION)
+            # 6. BGM 추가
+            total_video_duration = (INTRO_DURATION if intro_clip else 0) + (len(card_clips) * CARD_DURATION) + (INTRO_DURATION if final_intro_clip else 0)
             add_background_music(MERGED_CLIP_PATH, BGM_PATH, FINAL_VIDEO_PATH, total_video_duration)
 
-            # 6. 임시 파일 정리
+            # 7. 임시 파일 정리
             cleanup(
                 temp_dirs=[SINGLE_CLIP_DIR],
                 temp_files=[MERGED_CLIP_PATH]
