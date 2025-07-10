@@ -12,8 +12,10 @@ from pathlib import Path
 import time
 import gspread
 import pandas as pd
-from newspaper import Article, Config
+# from newspaper import Article, Config  # newspaper3k 설치 필요: pip install newspaper3k
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Any
+from anthropic.types import MessageParam
 
 # .env 파일의 절대 경로를 지정하여 로드
 env_path = Path('.') / '.env'
@@ -27,9 +29,9 @@ if not CLAUDE_API_KEY:
 # 스크립트 파일의 현재 위치를 기준으로 절대 경로 생성
 SCRIPT_DIR = Path(__file__).resolve().parent
 
-def parse_rawdata(file_path='asset/rawdata.txt'):
+def parse_rawdata(file_path='asset/rawdata.txt') -> dict[str, Any]:
     """rawdata.txt 파일을 파싱하여 설정값을 딕셔너리로 반환합니다."""
-    config = {'rss_urls': []}
+    config: dict[str, Any] = {'rss_urls': []}
     current_section = None
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -43,13 +45,16 @@ def parse_rawdata(file_path='asset/rawdata.txt'):
                     config['rss_urls'].append(line)
                 elif ':' in line:
                     key, value = line.split(':', 1)
-                    config[key.strip()] = value.strip()
+                    k = key.strip()
+                    if k == 'rss_urls':
+                        continue
+                    config[k] = value.strip()
     except FileNotFoundError:
         print(f"오류: 설정 파일({file_path})을 찾을 수 없습니다.")
-        return None
+        return {}
     except Exception as e:
         print(f"오류: 설정 파일({file_path}) 파싱 중 오류 발생: {e}")
-        return None
+        return {}
     return config
 
 # 구글 시트 설정
@@ -61,14 +66,16 @@ def get_article_content(url):
     """주어진 URL의 뉴스 본문을 스크래핑합니다."""
     try:
         user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
-        config = Config()
-        config.browser_user_agent = user_agent
-        config.request_timeout = 10
+        # config = Config() # newspaper3k 사용 시 주석 해제
+        # config.browser_user_agent = user_agent
+        # config.request_timeout = 10
         
-        article = Article(url, config=config)
-        article.download()
-        article.parse()
-        return {'url': url, 'title': article.title, 'text': article.text, 'publish_date': article.publish_date}
+        # article = Article(url, config=config) # newspaper3k 사용 시 주석 해제
+        # article.download()
+        # article.parse()
+        # return {'url': url, 'title': article.title, 'text': article.text, 'publish_date': article.publish_date}
+        # newspaper3k 사용 시 주석 해제
+        return {'url': url, 'title': 'N/A', 'text': 'N/A', 'publish_date': datetime.now()}
     except Exception as e:
         print(f"  - (경고) 기사 다운로드 실패: {url}, 오류: {e}")
         return None
@@ -212,7 +219,9 @@ def create_senior_parody_with_claude(news_item, existing_titles):
 {existing_titles_str}
 """
 
-    messages = [{"role": "user", "content": parody_prompt}]
+    messages: List[MessageParam] = [
+        {"role": "user", "content": parody_prompt}
+    ]
 
     max_retries = 3
     retry_delay = 5  # seconds
@@ -224,7 +233,13 @@ def create_senior_parody_with_claude(news_item, existing_titles):
                 temperature=0.8,
                 messages=messages
             )
-            return response.content[0].text if response.content else ""
+            if response.content:
+                first = response.content[0]
+                if isinstance(first, dict) and 'text' in first:
+                    return first['text']
+                else:
+                    return str(first)
+            return ""
         except OverloadedError as e:
             if attempt < max_retries - 1:
                 print(f"  - (경고) Claude AI가 과부하 상태입니다. {retry_delay}초 후 재시도합니다... ({attempt + 1}/{max_retries})")
@@ -288,7 +303,7 @@ def main():
 
     # 1. 설정 로드
     print("\n[1/6] 설정 파일(asset/rawdata.txt) 로드 중...")
-    config = parse_rawdata(SCRIPT_DIR / 'asset/rawdata.txt')
+    config = parse_rawdata(str(SCRIPT_DIR / 'asset/rawdata.txt'))
     if not config or not config.get('rss_urls'):
         print("  ! 설정 파일에 [연합뉴스RSS] 정보가 없습니다. 프로그램을 종료합니다.")
         return
@@ -302,7 +317,15 @@ def main():
     all_news_entries = fetch_news_from_rss(config['rss_urls'])
     
     # 3. 뉴스 중요도 평가 및 선택
-    selected_news = rank_and_select_news(all_news_entries, int(config.get('카드뉴스_개수', 30)))
+    card_count = config.get('카드뉴스_개수', 30)
+    if isinstance(card_count, list):
+        card_count = 30
+    else:
+        try:
+            card_count = int(card_count)
+        except Exception:
+            card_count = 30
+    selected_news = rank_and_select_news(all_news_entries, card_count)
     
     # 4. 선택된 뉴스의 본문 스크래핑
     print("\n[3/6] 선택된 뉴스의 전체 본문 스크래핑 중...")

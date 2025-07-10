@@ -95,7 +95,14 @@ def call_claude(prompt):
                 temperature=0.7,
                 messages=[{"role": "user", "content": prompt}]
             )
-            return response.content[0].text if response.content else ""
+            if response.content:
+                first = response.content[0]
+                # dict이고 'text' 키가 있으면 반환, 아니면 str로 변환
+                if isinstance(first, dict) and 'text' in first:
+                    return first['text']
+                else:
+                    return str(first)
+            return ""
         except Exception as e:
             print(f"Claude API 오류, 재시도: {e}")
             time.sleep(3)
