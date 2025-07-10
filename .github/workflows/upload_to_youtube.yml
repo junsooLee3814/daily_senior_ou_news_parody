@@ -1,0 +1,49 @@
+name: YouTube Upload (Senior OU News Parody)
+
+on:
+  schedule:
+    # 매일 오전 7시 30분 KST (22:30 UTC)에 실행
+    - cron: '30 22 * * *'
+  workflow_dispatch:
+
+jobs:
+  upload_to_youtube:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout repository with LFS
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          # LFS pull을 위해 fetch-depth를 0으로 설정 (전체 히스토리 가져오기)
+          fetch-depth: 0
+
+      - name: ⚡️ Git LFS 파일 다운로드
+        run: git lfs pull
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: 🐛 Debug current path and permissions
+        run: |
+          pwd
+          ls -la
+          ls -la youtube_uploader/
+          ls -la parody_video/
+
+      - name: 📦 Install YouTube uploader dependencies
+        working-directory: ./youtube_uploader
+        run: pip install -r requirements_youtube.txt
+
+      - name: 🔑 Restore YouTube authentication files
+        run: |
+          mkdir -p youtube_uploader
+          echo "${{ secrets.YOUTUBE_CLIENT_SECRETS }}" > youtube_uploader/client_secrets.json
+          printf "%s" '${{ secrets.YOUTUBE_TOKEN_JSON }}' > youtube_uploader/token.json
+
+      - name: 👀 Verify token.json content
+        run: cat youtube_uploader/token.json
+
+      - name: 🚀 Upload to YouTube
+        run: python youtube_uploader/upload_to_youtube.py
