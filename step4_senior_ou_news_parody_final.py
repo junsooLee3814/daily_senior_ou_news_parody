@@ -16,6 +16,7 @@ def run_script(script_name):
         # 자식 프로세스의 입출력 인코딩을 UTF-8로 강제
         env = os.environ.copy()
         env['PYTHONIOENCODING'] = 'utf-8'
+        env['PYTHONUNBUFFERED'] = '1'  # 실시간 출력 강제
 
         # 현재 파이썬 인터프리터를 사용하여 스크립트 실행
         process = subprocess.Popen(
@@ -25,7 +26,8 @@ def run_script(script_name):
             text=True,
             encoding='utf-8',
             errors='ignore', # 인코딩 오류 발생 시 무시
-            env=env # 수정된 환경 변수 적용
+            env=env, # 수정된 환경 변수 적용
+            bufsize=1 # 라인 버퍼링
         )
 
         # 실시간으로 출력 스트리밍

@@ -2,7 +2,7 @@ import os
 import feedparser
 from datetime import datetime, timedelta
 from anthropic import Anthropic
-from anthropic._exceptions import OverloadedError
+from anthropic._exceptions import OverloadedError, APIError
 from dotenv import load_dotenv
 from common_utils import get_gsheet, get_gspread_client, get_kst_now
 from difflib import SequenceMatcher
@@ -12,10 +12,14 @@ from pathlib import Path
 import time
 import gspread
 import pandas as pd
-# from newspaper import Article, Config  # newspaper3k 설치 필요: pip install newspaper3k
+from newspaper import Article, Config  # newspaper3k 설치 필요: pip install newspaper3k
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Any
-from anthropic.types import MessageParam
+from typing import List, Any, Dict, Optional
+import logging
+
+# 로깅 설정
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # .env 파일의 절대 경로를 지정하여 로드
 env_path = Path('.') / '.env'
@@ -29,10 +33,15 @@ if not CLAUDE_API_KEY:
 # 스크립트 파일의 현재 위치를 기준으로 절대 경로 생성
 SCRIPT_DIR = Path(__file__).resolve().parent
 
-def parse_rawdata(file_path='asset/rawdata.txt') -> dict[str, Any]:
+def parse_rawdata(file_path='asset/rawdata.txt') -> Dict[str, Any]:
     """rawdata.txt 파일을 파싱하여 설정값을 딕셔너리로 반환합니다."""
-    config: dict[str, Any] = {'rss_urls': []}
+    config: Dict[str, Any] = {'rss_urls': []}
     current_section = None
+    
+    if not Path(file_path).exists():
+        logger.error(f"설정 파일을 찾을 수 없습니다: {file_path}")
+        return config
+    
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             for line in f:
@@ -49,11 +58,8 @@ def parse_rawdata(file_path='asset/rawdata.txt') -> dict[str, Any]:
                     if k == 'rss_urls':
                         continue
                     config[k] = value.strip()
-    except FileNotFoundError:
-        print(f"오류: 설정 파일({file_path})을 찾을 수 없습니다.")
-        return {}
     except Exception as e:
-        print(f"오류: 설정 파일({file_path}) 파싱 중 오류 발생: {e}")
+        logger.error(f"설정 파일 파싱 중 오류 발생: {e}")
         return {}
     return config
 
@@ -62,199 +68,332 @@ WRITE_SHEET_NAME = 'senior_ou_news_parody_v3'
 DISCLAIMER = "면책조항 : 패러디/특정기관,개인과 무관/투자조언아님/재미목적"
 SOURCE_PREFIX = "https://gnews/" # 출처 URL 접두사
 
-def get_article_content(url):
+def get_article_content(url: str) -> Optional[Dict[str, Any]]:
     """주어진 URL의 뉴스 본문을 스크래핑합니다."""
     try:
         user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
-        # config = Config() # newspaper3k 사용 시 주석 해제
-        # config.browser_user_agent = user_agent
-        # config.request_timeout = 10
+        config = Config()
+        config.browser_user_agent = user_agent
+        config.request_timeout = 10
         
-        # article = Article(url, config=config) # newspaper3k 사용 시 주석 해제
-        # article.download()
-        # article.parse()
-        # return {'url': url, 'title': article.title, 'text': article.text, 'publish_date': article.publish_date}
-        # newspaper3k 사용 시 주석 해제
-        return {'url': url, 'title': 'N/A', 'text': 'N/A', 'publish_date': datetime.now()}
+        article = Article(url, config=config)
+        article.download()
+        article.parse()
+        
+        if not article.text or len(article.text.strip()) < 100:
+            logger.warning(f"기사 본문이 너무 짧거나 비어있음: {url}")
+            return None
+            
+        return {
+            'url': url, 
+            'title': article.title, 
+            'text': article.text, 
+            'publish_date': article.publish_date
+        }
     except Exception as e:
-        print(f"  - (경고) 기사 다운로드 실패: {url}, 오류: {e}")
+        logger.warning(f"기사 다운로드 실패: {url}, 오류: {e}")
         return None
 
-def fetch_news_from_rss(rss_urls):
+def fetch_news_from_rss(rss_urls: List[str]) -> List[Dict[str, Any]]:
     """여러 RSS 피드에서 최신 뉴스 목록을 가져옵니다."""
     all_entries = []
     for url in rss_urls:
-        print(f"  - RSS 피드 확인 중: {url}")
-        feed = feedparser.parse(url)
-        for entry in feed.entries:
-            entry['source_rss'] = url
-            all_entries.append(entry)
+        logger.info(f"RSS 피드 확인 중: {url}")
+        try:
+            feed = feedparser.parse(url)
+            if hasattr(feed, 'status') and isinstance(feed.status, int) and feed.status >= 400:
+                logger.warning(f"RSS 피드 오류 (HTTP {feed.status}): {url}")
+                continue
+                
+            for entry in feed.entries:
+                entry['source_rss'] = url
+                all_entries.append(entry)
+        except Exception as e:
+            logger.error(f"RSS 피드 파싱 오류: {url}, {e}")
+            continue
+            
     # 중복 제거 (link 기준)
     unique_entries = list({entry.link: entry for entry in all_entries}.values())
-    print(f"  -> 총 {len(unique_entries)}개의 고유한 뉴스를 발견했습니다.")
+    logger.info(f"총 {len(unique_entries)}개의 고유한 뉴스를 발견했습니다.")
     return unique_entries
 
-def rank_and_select_news(news_list, num_to_select=30):
-    """뉴스 목록의 중요도를 평가하고 상위 N개를 선택합니다."""
-    
-    CATEGORY_WEIGHTS = {
-        'opinion': 1.5, 'politics': 1.4, 'economy': 1.3, 'market': 1.2,
-        'local': 1.0, 'health': 0.9
+def rank_and_select_news(news_list: List[Dict[str, Any]], num_to_select: int = 30) -> List[Dict[str, Any]]:
+    """시니어층(50-70대) 관심도 기반 뉴스 선정"""
+    # 50/60/70대 타겟으로 가중치 재조정
+    SENIOR_CATEGORY_WEIGHTS = {
+        'health': 2.5, 'welfare': 2.3, 'economy': 2.0, 'politics': 1.8,
+        'opinion': 1.6, 'local': 1.5, 'market': 1.4, 'society': 1.3,
     }
-    KEYWORD_WEIGHTS = {
-        '금리': 5, '정부': 4, '특검': 4, '대통령': 4, 'AI': 3, '연금': 3,
-        '부동산': 3, '물가': 2
+    
+    # 50/60/70대 핵심 관심사로 키워드 가중치 강화
+    SENIOR_KEYWORD_WEIGHTS = {
+        # 연금/복지 관련 (최고 우선순위)
+        '연금': 15, '국민연금': 14, '기초연금': 13, '노령연금': 12,
+        '의료비': 12, '건강보험': 12, '요양보험': 11, '장기요양': 10,
+        
+        # 건강 관련 (50/60/70대 핵심 관심사)
+        '치매': 12, '건강검진': 10, '고혈압': 9, '당뇨': 9, '암': 9,
+        '관절': 8, '무릎': 8, '허리': 8, '백내장': 7, '골다공증': 7,
+        
+        # 경제/생활 관련
+        '물가': 11, '전기료': 10, '가스요금': 10, '수도요금': 9,
+        '부동산': 8, '집값': 8, '아파트': 7, '전세': 7, '임대료': 7,
+        '금리': 8, '예금': 7, '적금': 6, '펀드': 5, '주식': 6,
+        
+        # 정치/사회 관련
+        '대통령': 9, '정부': 8, '국정감사': 7, '특검': 7, '국회': 6,
+        '세금': 9, '소득세': 8, '재산세': 8, '상속세': 7,
+        
+        # 노인복지 관련
+        '노인복지': 12, '독거노인': 10, '경로당': 8, '실버': 8,
+        '요양원': 9, '요양시설': 8, '재가요양': 7,
+        
+        # 자녀/가족 관련
+        '교육': 6, '대학': 6, '취업': 7, '결혼': 6, '육아': 5,
+        '손자': 6, '손녀': 6, '며느리': 5, '사위': 5,
+        
+        # 기타
+        'AI': 4, '스포츠': 4, '문화': 4, '여행': 5, '종교': 5
+    }
+    
+    # 50/60/70대 특화 보너스 키워드
+    SENIOR_BONUS_KEYWORDS = {
+        '노인': 5, '시니어': 5, '50대': 4, '60대': 5, '70대': 6,
+        '은퇴': 5, '정년': 5, '퇴직': 5, '중년': 4, '노년': 5,
+        '베이비부머': 4, '실버': 4, '고령': 4, '장년': 3,
+        '어르신': 4, '노인장': 3, '할머니': 3, '할아버지': 3
+    }
+    
+    # MZ세대/젊은층 관련 제외 키워드 강화
+    EXCLUDE_KEYWORDS = {
+        'K-POP': -5, '아이돌': -5, '방탄소년단': -4, 'BTS': -4,
+        '게임': -4, '온라인게임': -4, 'e스포츠': -4,
+        '유튜버': -4, '인플루언서': -4, '크리에이터': -3,
+        'SNS': -3, '틱톡': -4, '인스타그램': -3, '페이스북': -2,
+        'MZ세대': -4, 'Z세대': -4, '밀레니얼': -3,
+        '힙합': -3, '래퍼': -3, 'EDM': -3,
+        '웹툰': -2, '만화': -2, '애니메이션': -2
     }
 
     for news in news_list:
         score = 0
+        title = news.get('title', '')
+        source_rss = news.get('source_rss', '')
+
         # 1. 카테고리 가중치
-        for cat, weight in CATEGORY_WEIGHTS.items():
-            if cat in news.get('source_rss', ''):
+        for cat, weight in SENIOR_CATEGORY_WEIGHTS.items():
+            if cat in source_rss:
                 score += weight
                 break
-        
-        # 2. 키워드 가중치
-        title = news.get('title', '')
-        for keyword, weight in KEYWORD_WEIGHTS.items():
+
+        # 2. 핵심 키워드 가중치
+        for keyword, weight in SENIOR_KEYWORD_WEIGHTS.items():
             if keyword in title:
                 score += weight
-        
-        # 3. 최신성 가중치 (최근 24시간 내 기사에 가산점)
+
+        # 3. 시니어 특별 관심 키워드 보너스
+        for keyword, bonus in SENIOR_BONUS_KEYWORDS.items():
+            if keyword in title:
+                score += bonus
+
+        # 4. 제외 키워드 페널티
+        for keyword, penalty in EXCLUDE_KEYWORDS.items():
+            if keyword in title:
+                score += penalty
+
+        # 5. 최신성 가중치
         published_time = news.get('published_parsed')
         if published_time:
             published_dt = datetime.fromtimestamp(time.mktime(published_time))
             if datetime.now() - published_dt < timedelta(days=1):
+                score += 3  # 최신성 가중치 증가
+
+            # 6. 시간대별 가중치 (50/60/70대 생활패턴 반영)
+            hour = published_dt.hour
+            if 6 <= hour <= 9:  # 아침 뉴스 시간
                 score += 2
+            elif 12 <= hour <= 14:  # 점심시간
+                score += 1
+            elif 18 <= hour <= 21:  # 저녁 뉴스 시간
+                score += 1.5
 
         news['score'] = score
-    
-    # 점수 기준으로 정렬
+
     sorted_news = sorted(news_list, key=lambda x: x.get('score', 0), reverse=True)
-    
-    print("\n[2/6] 뉴스 중요도 평가 및 상위 30개 선정...")
-    for i, news in enumerate(sorted_news[:10]): # 상위 10개만 점수 표시
-        print(f"  - {i+1}위 (점수: {news.get('score', 0):.1f}): {news.title}")
-        
+
+    logger.info("시니어(50/60/70대) 맞춤 뉴스 중요도 평가 및 상위 선정...")
+    for i, news in enumerate(sorted_news[:10]):
+        logger.info(f"  - {i+1}위 (점수: {news.get('score', 0):.1f}): {news.get('title', '')}")
+
     return sorted_news[:num_to_select]
 
-def create_senior_parody_with_claude(news_item, existing_titles):
+def create_senior_parody_with_claude(news_item: Dict[str, Any], existing_titles: List[str]) -> str:
     """Claude AI를 사용하여 시니어 뉴스 패러디 생성"""
     client = Anthropic(api_key=CLAUDE_API_KEY)
 
     news_title = news_item.get('title', '제목 없음')
-    news_summary = news_item.get('text', '')[:5000]
+    news_summary = news_item.get('text', '')[:3000]  # 5000에서 3000으로 단축
 
-    # f-string 내 백슬래시 문법 오류를 피하기 위해, 중복 방지 목록 문자열을 미리 생성합니다.
+    # 중복 방지 목록 문자열 생성
     if existing_titles:
-        # 각 제목 앞에 "- "를 붙이고 줄바꿈으로 연결합니다.
-        existing_titles_str = "- " + "\n- ".join(existing_titles)
+        existing_titles_str = "- " + "\n- ".join(existing_titles[-10:])  # 최근 10개만 표시
     else:
         existing_titles_str = "없음"
 
-    # 프롬프트 구성
-    parody_prompt = f"""# 오늘의유머_뉴스패러디_시니어V 제작 지침 (v2.0)
+    # 50/60/70대 타겟으로 프롬프트 수정
+    parody_prompt = f"""# 🚀 조회수 폭발을 위한 시니어 뉴스 패러디 제작
 
-## 🎯 **미션**
-당신은 높은 학식과 경험을 갖춘 시니어 독자를 위한 **고품격 뉴스 패러디 제작 AI**입니다. 제공되는 **뉴스 본문 전체**를 깊이 있게 분석하여, 단순한 유머를 넘어 **지적인 공감과 통찰**을 이끌어내는 품위 있는 패러디를 제작해야 합니다.
+## 🎯 미션
+당신은 50/60/70대가 "이거 진짜 맞는 말이네!"하며 가족 단톡방에 공유하고 싶어지는 뉴스 패러디를 만드는 AI입니다.
 
-## 🧠 **패러디 핵심 철학**
-- **타겟 독자**: 대학 교육을 받은, 보수적 성향을 가진 분들이며, 사회 현상에 대한 깊이 있는 이해를 추구합니다.
-- **패러디 톤앤매너**:
-  - **정부/기관 관련**: 노골적인 비난이나 급진적 표현은 절대 금물입니다. 대신, **은유와 반어법을 활용한 시니컬한 풍자**로 한 수 위의 비판을 보여주세요. 점잖지만 뼈가 있는 농담을 구사해야 합니다.
-  - **일반 사회/경제 뉴스**: 현상의 이면을 꿰뚫고, 독자가 "아, 그렇지!"하며 무릎을 탁 칠 만한 **현실적이고 통찰력 있는 패러디**를 만들어야 합니다.
-- **궁극적 목표**: 저급한 웃음이 아닌, **지적 유희에서 비롯된 품위 있는 웃음**을 선사하는 것입니다.
+## 타겟 특성
+- **연령**: 50/60/70대 (베이비부머 세대 중심)
+- **직업**: 은퇴자, 자영업자, 직장인 후배, 전업주부
+- **관심사**: 연금/건강/자녀걱정/물가/노후준비
+- **성향**: "요즘 세상 참 이상해졌다", "우리 때는 그런 게 아니었는데" 스타일
 
-## 📰 분석할 뉴스 원문
-- **제목:** {news_title}
-- **본문:**
-{news_summary}
+## 핵심 전략: "할아버지가 신문 보며 혀 차는 그 느낌"
 
----
-## 📝 **결과물 포맷 (엄수)**
-- **(절대 규칙) 다른 설명 없이, 아래 JSON 형식으로만 응답해주세요.**
-- **(절대 규칙) 절대로 이모지(emoji)는 사용하지 마세요.**
-- **(절대 규칙) 각 항목의 글자수 제한을 반드시 지켜주세요.**
+### 1. ou_title 제작 원칙 (35자 이내)
+**목표**: 1초 안에 "아 맞네" 하고 클릭하게 만들기
 
-```json
+**A타입 - 라떼형**: "[뉴스 팩트]... 옛날엔 말이야"
+- "연금 68세부터 준다네... 옛날엔 55세였는데"
+- "김밥 5천원이라고? 옛날엔 500원이었는데"
+- "대통령 지지율 20%... 옛날 같으면 벌써 물러났지"
+
+**B타입 - 현실탄식형**: "[충격 팩트] + 세상 참 살기 힘들어졌네"
+- "의료비 또 올랐다네... 세상 참 살기 힘들어"
+- "전기료 20% 인상... 겨울에 어쩌라고"
+- "집값 또 뛰었다는데... 우리 애들은 언제 사나"
+
+**C타입 - 걱정형**: "[뉴스] + 우리 아이들은 어쩌나"
+- "AI가 일자리 뺏는다는데... 우리 아들은 뭐하나"
+- "결혼 안 하는 젊은이들... 손자는 언제 보나"
+- "출산율 0.7명... 나라 꼴이 이게 뭐야"
+
+**D타입 - 분노형**: "[뉴스] + 서민만 호구네"
+- "또 세금 올린다네... 서민만 호구 취급"
+- "국회의원 세비 인상... 자기들만 챙기네"
+- "공무원 연금은 그대로... 불공평하네 참"
+
+### 2. latte 작성법 (80자 이내)
+**목표**: 과거 경험담으로 공감대 폭발
+- "우리 젊을 때는 [구체적 과거 상황]이었는데, 요즘은 [현재 상황]이니..."
+- 구체적 금액이나 시기 활용
+- "그때는", "예전엔", "우리 때는" 필수 사용
+
+**예시**:
+- "우리 젊을 때는 대학등록금이 한 학기에 30만원이었는데, 요즘은 500만원이라니 기가 막혀"
+- "예전엔 쌀 한 가마에 2만원이면 샀는데, 지금은 10만원도 넘네 참"
+
+### 3. ou_think 작성법 (60자 이내)
+**목표**: 50/60/70대 속마음 솔직하게 표현
+- 노후 불안, 자녀 걱정, 건강 걱정, 경제적 부담
+- "우리만 손해", "나라가 이 꼴", "애들이 걱정"
+- 감정 표현: 참..., 에휴..., 정말..., 어이없네
+
+**예시**:
+- "연금도 줄이고 의료비는 올리고... 노인들 죽으라는 거야?"
+- "애들 미래가 걱정되네... 이런 세상에서 어떻게 살라고"
+- "열심히 살아온 세대가 이런 대접 받나... 참 서글프다"
+
+## 중요: 응답 형식
+반드시 아래 JSON 형식으로만 응답하세요. 다른 설명이나 텍스트는 일절 포함하지 마세요.
+
 {{
-  "ou_title": "여기에 [오유_Title] 내용 (50자 이내)",
-  "latte": "여기에 [라떼] 내용 (100자 이내)",
-  "ou_think": "여기에 [오유_Think] 내용 (70자 이내)"
+  "ou_title": "35자 이내 제목",
+  "latte": "80자 이내 라떼 이야기", 
+  "ou_think": "60자 이내 현실 토로"
 }}
-```
 
-## 🎨 **세부 제작 가이드라인**
+## 뉴스 분석
+- **제목**: {news_title}
+- **내용**: {news_summary[:800]}
 
-### **[ou_title] 작성법 (50자 이내):**
-<<<<<<< HEAD
-- **짧고 임팩트 있는 후킹 문구 사용**: 기존의 "충격", "경악" 같은 단조로운 표현 대신, 아래 예시처럼 짧고 현실적인 후킹 문구를 창의적으로 조합하여 제목을 만드세요.
-- **감탄형**: "이게 맞나?", "말이 되나?", "세상에나...", "어이없네"
-- **현실형**: "결국 우리만", "또 서민만", "역시나", "뻔한 수순"
-- **세대형**: "요즘 세상", "우리 때는", "젊은 애들", "옛날 같으면"
-- **실감형**: "체감 100%", "현실 직격탄", "솔직 후기", "진짜 이유"
-- **뉴스 핵심과 연결**: 후킹 문구를 뉴스 핵심 내용과 자연스럽게 연결하세요. (예: "AI 일자리 뺏는다는데... 말이 되나?", "트럼프 관세 올린다면서... 결국 우리만 손해", "양자컴퓨터 나왔다는데... 요즘 세상 따라가기 힘들어")
-=======
-- **품위 있는 후킹**: "경악", "충격" 같은 자극적인 단어 사용을 줄이고, "흥미롭군요", "생각해볼 문제입니다", "이걸 이렇게 해석하네?", "글쎄요..." 등 **지적 호기심을 유발하는 문구**를 사용하세요.
-- **핵심 찌르기**: 뉴스 본문의 핵심을 꿰뚫는 질문이나 반어적 감탄사를 사용하세요. (예: "참으로 시의적절한 대책이 아닐 수 없네요.")
->>>>>>> 8b9b788862eb7149931ff171aa490a5a86e05468
+## 금지사항
+- 이모지 사용 금지
+- 젊은 세대 용어 사용 금지 (대박, 쩐다, 핵 등)
+- 정치적 편향성 강한 표현 금지
+- 35자 이상의 긴 제목 금지
+- JSON 외의 다른 텍스트 절대 금지
 
-### **[라떼] 작성법 (100자 이내):**
-- **"왕년에는..."**: 본문 내용과 관련된 과거의 경험을 현재와 비교하며 **역사적 관점이나 변화의 아이러니**를 담아내세요. (예: "왕년에는 삐삐만 울려도 설렜는데, 이젠 인공지능이 말을 거는 세상이라니.")
-- **점잖은 말투**: "~했다오", "~라더군", "~일세" 등 연륜이 느껴지는 점잖은 어조를 사용하세요.
-
-### **[오유_Think] 작성법 (70자 이내):**
-- **지식인의 시각**: 단순한 푸념을 넘어, **경제 원리나 사회 현상에 기반한 냉철하고 시니컬한 분석**을 담아내세요. (예: "결국 수요와 공급의 법칙 아니겠소. 말은 쉬워도 지갑은 얇아지니.")
-- **은유와 풍자**: "겉으로는 그럴싸하지만, 속내는 뻔한 것", "고상한 말로 포장했지만, 결국은..." 등 현상의 이면을 꼬집는 표현을 사용하세요.
-
-### **감정 표현 필수 사용:**
-- 뉴스마다 ??, !!, ..., ㅋㅋ, ㅠㅠ 등을 2~3개 이상 **절제되고 품위 있게** 조합하여 감정을 표현해주세요. (예: 'ㅋㅋㅋ'보다는 'ㅋㅋ' 또는 '허허...'가 적절할 수 있습니다.)
-
-## ✍️ **(매우 중요) 중복 패러디 방지**
-- 아래는 이미 생성된 패러디 제목들입니다.
-- **절대로 아래 목록과 유사한 내용이나 스타일의 `ou_title`을 만들지 마세요.**
-- 완전히 새롭고, 창의적인 제목을 만들어야 합니다.
-
-### 📜 이미 생성된 제목 목록:
+## 중복 방지
+이미 생성된 제목들과 중복되지 않게 새롭고 창의적으로 만드세요:
 {existing_titles_str}
 """
 
+    # 타입 힌트 수정: MessageParam 사용
+    from anthropic.types import MessageParam
     messages: List[MessageParam] = [
         {"role": "user", "content": parody_prompt}
     ]
 
     max_retries = 3
     retry_delay = 5  # seconds
+    
     for attempt in range(max_retries):
         try:
             response = client.messages.create(
-                model="claude-3-5-sonnet-20240620",
-                max_tokens=2000,
+                model="claude-3-haiku-20240307",
+                max_tokens=2000,  # 1500에서 2000으로 증가
                 temperature=0.8,
                 messages=messages
             )
+            
+            # 응답 처리 개선
+            response_text = ""
             if response.content:
-                first = response.content[0]
-                if isinstance(first, dict) and 'text' in first:
-                    return first['text']
+                first_content = response.content[0]
+                # TextBlock 객체 처리
+                if hasattr(first_content, 'text') and hasattr(first_content, 'type') and first_content.type == 'text':
+                    response_text = first_content.text
+                elif isinstance(first_content, dict) and 'text' in first_content:
+                    response_text = first_content['text']
                 else:
-                    return str(first)
-            return ""
-        except OverloadedError as e:
+                    response_text = str(first_content)
+            
+            if not response_text:
+                logger.warning("Claude 응답이 비어있습니다. 재시도합니다.")
+                continue
+                
+            return response_text
+            
+        except (APIError, OverloadedError) as e:
+            error_message = str(e)
+            if 'credit balance is too low' in error_message:
+                logger.error("🚨 Claude API 크레딧 부족! Anthropic Console에서 크레딧을 충전해주세요.")
+                logger.error("🔗 https://console.anthropic.com/")
+                return ""
+            elif 'rate limit' in error_message.lower():
+                logger.warning(f"API 속도 제한에 걸렸습니다. {retry_delay}초 후 재시도... ({attempt + 1}/{max_retries})")
+                time.sleep(retry_delay)
+                retry_delay *= 2
+            elif isinstance(e, OverloadedError):
+                if attempt < max_retries - 1:
+                    logger.warning(f"Claude AI가 과부하 상태입니다. {retry_delay}초 후 재시도... ({attempt + 1}/{max_retries})")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    logger.error(f"Claude AI 과부하로 패러디 생성에 실패했습니다: {e}")
+                    return ""
+            else:
+                logger.error(f"Claude API 오류: {e}")
+                return ""
             if attempt < max_retries - 1:
-                print(f"  - (경고) Claude AI가 과부하 상태입니다. {retry_delay}초 후 재시도합니다... ({attempt + 1}/{max_retries})")
+                logger.warning(f"Claude AI가 과부하 상태입니다. {retry_delay}초 후 재시도... ({attempt + 1}/{max_retries})")
                 time.sleep(retry_delay)
                 retry_delay *= 2  # Exponential backoff
             else:
-                print(f"  - (오류) Claude AI 과부하로 패러디 생성에 실패했습니다: {e}")
+                logger.error(f"Claude AI 과부하로 패러디 생성에 실패했습니다: {e}")
                 return ""
         except Exception as e:
-            print(f"  - (오류) Claude AI 요청 중 예상치 못한 오류 발생: {e}")
+            logger.error(f"Claude AI 요청 중 예상치 못한 오류 발생: {e}")
             return ""
     return ""
 
-def save_results_to_gsheet(client, parody_data_list, spreadsheet_id, worksheet_name):
-    """생성된 패러디 결과를 구글 시트에 누적하여 저장합니다."""
+def save_results_to_gsheet(client, parody_data_list: List[Dict[str, Any]], spreadsheet_id: str, worksheet_name: str):
+    """생성된 패러디 결과를 구글 시트에 저장합니다. (이전 기록 삭제 후 새로 기록)"""
     try:
         spreadsheet = client.open_by_key(spreadsheet_id)
         try:
@@ -262,15 +401,21 @@ def save_results_to_gsheet(client, parody_data_list, spreadsheet_id, worksheet_n
         except gspread.WorksheetNotFound:
             # 워크시트가 없으면 새로 만듭니다.
             worksheet = spreadsheet.add_worksheet(title=worksheet_name, rows=1, cols=20)
-            print(f"  - 새 워크시트 '{worksheet_name}'를 생성했습니다.")
+            logger.info(f"새 워크시트 '{worksheet_name}'를 생성했습니다.")
 
-        # 시트가 비어있는지 확인하고, 비어있다면 헤더 추가
-        if not worksheet.get_all_values():
-            headers = ['today', 'ou_title', 'original_title', 'latte', 'ou_think', 'disclaimer', 'source_url']
-            worksheet.append_row(headers)
-            print("  - 시트가 비어있어 헤더를 추가합니다.")
+        # 헤더 정의
+        headers = ['today', 'ou_title', 'original_title', 'latte', 'ou_think', 'disclaimer', 'source_url']
         
-        rows_to_upload = []
+        if not parody_data_list:
+            logger.info("구글 시트에 추가할 데이터가 없습니다.")
+            # 데이터가 없어도 헤더만 남기고 기존 데이터 삭제
+            worksheet.clear()
+            worksheet.append_row(headers)
+            logger.info("기존 데이터를 삭제하고 헤더만 남겼습니다.")
+            return
+            
+        # 새로운 데이터 준비
+        rows_to_upload = [headers]  # 헤더를 첫 번째 행으로 추가
         today_str = get_kst_now().strftime('%Y-%m-%d, %a').lower()
 
         for p_data in parody_data_list:
@@ -285,129 +430,170 @@ def save_results_to_gsheet(client, parody_data_list, spreadsheet_id, worksheet_n
             ]
             rows_to_upload.append(row)
         
-        if rows_to_upload:
-            worksheet.append_rows(rows_to_upload)
-            print(f"  -> 구글 시트 '{worksheet_name}'에 {len(rows_to_upload)}개 데이터 추가 저장 완료!")
-        else:
-            print("  -> 구글 시트에 추가할 데이터가 없습니다.")
+        # 기존 데이터 모두 삭제 후 새로운 데이터로 교체
+        worksheet.clear()
+        worksheet.update('A1', rows_to_upload)
+        logger.info(f"구글 시트 '{worksheet_name}'의 기존 데이터를 삭제하고 {len(parody_data_list)}개 새로운 데이터로 교체 완료!")
 
     except Exception as e:
-        print(f"  ! 구글 시트 저장 중 오류 발생: {e}")
+        logger.error(f"구글 시트 저장 중 오류 발생: {e}")
 
 def main():
     start_time = time.time()
     print("="*50)
-    print("시니어 뉴스 패러디 자동 생성을 시작합니다.")
-    print(f"시작 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("시니어(50/60/70대) 뉴스 패러디 자동 생성을 시작합니다.", flush=True)
+    print(f"시작 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", flush=True)
     print("="*50)
 
     # 1. 설정 로드
-    print("\n[1/6] 설정 파일(asset/rawdata.txt) 로드 중...")
+    logger.info("설정 파일(asset/rawdata.txt) 로드 중...")
     config = parse_rawdata(str(SCRIPT_DIR / 'asset/rawdata.txt'))
     if not config or not config.get('rss_urls'):
-        print("  ! 설정 파일에 [연합뉴스RSS] 정보가 없습니다. 프로그램을 종료합니다.")
+        logger.error("설정 파일에 [연합뉴스RSS] 정보가 없습니다. 프로그램을 종료합니다.")
         return
     
-    if not config or '패러디결과_스프레드시트_ID' not in config:
-        print("  ! 설정 파일에 '패러디결과_스프레드시트_ID' 정보가 없습니다. 프로그램을 종료합니다.")
+    if '패러디결과_스프레드시트_ID' not in config:
+        logger.error("설정 파일에 '패러디결과_스프레드시트_ID' 정보가 없습니다. 프로그램을 종료합니다.")
         return
 
     # 2. RSS 피드에서 뉴스 가져오기
-    print("\n[2/6] RSS 피드에서 뉴스 수집 중...")
+    logger.info("RSS 피드에서 뉴스 수집 중...")
     all_news_entries = fetch_news_from_rss(config['rss_urls'])
+    
+    if not all_news_entries:
+        logger.error("수집된 뉴스가 없습니다. RSS 피드를 확인해주세요.")
+        return
     
     # 3. 뉴스 중요도 평가 및 선택
     card_count = config.get('카드뉴스_개수', 30)
-    if isinstance(card_count, list):
-        card_count = 30
-    else:
+    if isinstance(card_count, str):
         try:
             card_count = int(card_count)
-        except Exception:
+        except ValueError:
             card_count = 30
+    elif isinstance(card_count, list):
+        card_count = 30
+    
+    # 30개 기사 처리
+    card_count = min(card_count, 30)
+    
     selected_news = rank_and_select_news(all_news_entries, card_count)
     
     # 4. 선택된 뉴스의 본문 스크래핑
-    print("\n[3/6] 선택된 뉴스의 전체 본문 스크래핑 중...")
+    logger.info("선택된 뉴스의 전체 본문 스크래핑 중...")
     scraped_articles = []
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        future_to_url = {executor.submit(get_article_content, news.link): news for news in selected_news}
+    with ThreadPoolExecutor(max_workers=5) as executor:  # 10에서 5로 줄임
+        future_to_url = {executor.submit(get_article_content, news.get('link', '')): news for news in selected_news}
         for future in as_completed(future_to_url):
             result = future.result()
             if result and result['text']:
                 original_news_item = future_to_url[future]
                 result['source_rss'] = original_news_item.get('source_rss')
-                result['original_link'] = original_news_item.link
+                result['original_link'] = original_news_item.get('link', '')
                 scraped_articles.append(result)
-                print(f"  - 스크래핑 완료: {result['title'][:30]}...")
-            time.sleep(0.1) # 서버 부하 방지를 위한 약간의 딜레이
-    print(f"  -> 총 {len(scraped_articles)}개 기사의 본문을 성공적으로 가져왔습니다.")
+                logger.info(f"스크래핑 완료: {result['title'][:30]}...")
+            time.sleep(0.2) # 서버 부하 방지를 위한 딜레이 증가
+    
+    logger.info(f"총 {len(scraped_articles)}개 기사의 본문을 성공적으로 가져왔습니다.")
+
+    if not scraped_articles:
+        logger.error("스크래핑된 기사가 없습니다.")
+        return
 
     # 5. Claude AI를 사용하여 뉴스 패러디 생성
-    print("\n[4/6] Claude AI를 사용하여 뉴스 패러디 생성 중...")
+    logger.info("Claude AI를 사용하여 뉴스 패러디 생성 중...")
     parody_results = []
     existing_titles = []
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        future_to_article = {executor.submit(create_senior_parody_with_claude, article, existing_titles): article for article in scraped_articles}
+    
+    # API 호출 실패 카운터
+    api_failures = 0
+    max_failures = 5  # 연속 5회 실패시 중단
+    
+    # 순차 처리로 변경 (병렬 처리시 existing_titles 동기화 문제 방지)
+    for i, article in enumerate(scraped_articles):
+        logger.info(f"패러디 생성 중 ({i+1}/{len(scraped_articles)}): {article['title'][:30]}...")
         
-        for i, future in enumerate(as_completed(future_to_article)):
-            article = future_to_article[future]
-            print(f"  - 패러디 생성 중 ({i+1}/{len(scraped_articles)}): {article['title'][:30]}...")
+        try:
+            parody_response = create_senior_parody_with_claude(article, existing_titles)
+            if not parody_response:
+                api_failures += 1
+                logger.warning(f"Claude 응답이 없어 건너뜁니다. (실패 횟수: {api_failures})")
+                if api_failures >= max_failures:
+                    logger.error(f"연속 {max_failures}회 API 호출 실패로 중단합니다.")
+                    break
+                continue
+
+            # 강화된 JSON 파싱
+            clean_str = parody_response.strip()
+            
+            # ```json 또는 ``` 제거
+            if clean_str.startswith("```json"):
+                clean_str = clean_str[7:].strip()
+            elif clean_str.startswith("```"):
+                clean_str = clean_str[3:].strip()
+            if clean_str.endswith("```"):
+                clean_str = clean_str[:-3].strip()
+            
+            # 불필요한 설명 텍스트 제거 (JSON만 추출)
+            json_start = clean_str.find('{')
+            json_end = clean_str.rfind('}')
+            if json_start != -1 and json_end != -1 and json_end > json_start:
+                clean_str = clean_str[json_start:json_end+1]
+            
+            # 문자열 정리
+            clean_str = re.sub(r'\s+', ' ', clean_str).strip()
             
             try:
-                parody_json_str = future.result()
-                if not parody_json_str:
-                    continue
-
-                # Claude 응답에서 JSON 부분만 추출 (```json ... ``` 핸들링)
-                clean_str = parody_json_str.strip()
-                if clean_str.startswith("```json"):
-                    clean_str = clean_str[7:].strip()
-                if clean_str.endswith("```"):
-                    clean_str = clean_str[:-3].strip()
+                parody_data = json.loads(clean_str)
                 
-                try:
-                    parody_data = json.loads(clean_str)
-                    
-                    # 중복 및 유사도 검사
-                    is_duplicate = False
-                    if 'ou_title' in parody_data:
-                        current_title = parody_data['ou_title']
-                        for title in existing_titles:
-                            if SequenceMatcher(None, current_title, title).ratio() > 0.85:
-                                is_duplicate = True
-                                print(f"  - (경고) 유사한 제목이 이미 존재하여 건너뜁니다: {current_title}")
-                                break
-                        
-                        if not is_duplicate:
-                            parody_data['original_title'] = article['title']
-                            parody_data['original_link'] = article['url']
-                            parody_results.append(parody_data)
-                            existing_titles.append(current_title)
-                    else:
-                        print(f"  - (경고) 응답에 'ou_title'이 없어 건너뜁니다: {clean_str}")
-
-                except json.JSONDecodeError:
-                    print(f"  - (경고) Claude AI의 응답이 유효한 JSON이 아닙니다: {parody_json_str}")
+                # 필수 키 확인
+                if 'ou_title' not in parody_data:
+                    logger.warning("'ou_title' 키가 없어 건너뜁니다.")
                     continue
+                
+                # 중복 및 유사도 검사
+                current_title = parody_data['ou_title']
+                is_duplicate = False
+                
+                for title in existing_titles:
+                    if SequenceMatcher(None, current_title, title).ratio() > 0.85:
+                        is_duplicate = True
+                        logger.warning(f"유사한 제목이 이미 존재하여 건너뜁니다: {current_title}")
+                        break
+                
+                if not is_duplicate:
+                    parody_data['original_title'] = article['title']
+                    parody_data['original_link'] = article['url']
+                    parody_results.append(parody_data)
+                    existing_titles.append(current_title)
+                    logger.info(f"✅ 패러디 생성 성공: {current_title}")
+                    api_failures = 0  # 성공시 실패 카운터 리셋
+                
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON 파싱 실패: {e}")
+                logger.warning(f"정리된 응답: {clean_str[:100]}...")
+                continue
 
-            except Exception as e:
-                print(f"  - (오류) 패러디 생성 작업 중 오류 발생: {article['title']}, {e}")
+        except Exception as e:
+            logger.error(f"패러디 생성 중 오류 발생: {e}")
+            continue
 
-    print(f"  -> 총 {len(parody_results)}개의 고유한 패러디를 생성했습니다.")
+    logger.info(f"총 {len(parody_results)}개의 고유한 패러디를 생성했습니다.")
 
     # 6. 구글 시트에 결과 저장
-    print("\n[5/6] 생성된 패러디 결과를 구글 시트에 저장 중...")
+    logger.info("생성된 패러디 결과를 구글 시트에 저장 중...")
     try:
         g_client = get_gspread_client()
         save_results_to_gsheet(g_client, parody_results, config['패러디결과_스프레드시트_ID'], WRITE_SHEET_NAME)
     except Exception as e:
-        print(f"  ! 구글 인증 또는 시트 저장에 실패했습니다: {e}")
+        logger.error(f"구글 인증 또는 시트 저장에 실패했습니다: {e}")
 
     # 7. 종료
     end_time = time.time()
-    print("\n[6/6] 모든 작업 완료!")
-    print(f"총 소요 시간: {end_time - start_time:.2f}초")
+    print("\n" + "="*50)
+    print("모든 작업 완료!", flush=True)
+    print(f"총 소요 시간: {end_time - start_time:.2f}초", flush=True)
+    print(f"성공적으로 생성된 패러디: {len(parody_results)}개", flush=True)
     print("="*50)
 
 if __name__ == "__main__":

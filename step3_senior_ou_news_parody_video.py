@@ -34,19 +34,23 @@ def parse_rawdata(file_path='asset/rawdata.txt'):
         print(f"설정 파일({file_path})을 찾을 수 없습니다. 기본값으로 진행합니다.")
     return config
 
-print("--- 패러디 카드 동영상 제작 시작 ---")
+print("--- 패러디 카드 동영상 제작 시작 ---", flush=True)
 
 # 설정 파일 로드
 raw_config = parse_rawdata()
 card_duration_str = raw_config.get('동영상_길이', '4초') # '동영상_길이' 키를 사용하도록 수정
 try:
-    card_duration_val = int(re.search(r'\d+', card_duration_str).group())
+    match = re.search(r'\d+', card_duration_str)
+    if match:
+        card_duration_val = int(match.group())
+    else:
+        card_duration_val = 4
 except (AttributeError, ValueError):
     card_duration_val = 4
 
 # --- 설정 ---
 CARD_DURATION = card_duration_val  # 각 카드 이미지의 노출 시간 (초)
-INTRO_DURATION = 2 # 인트로 이미지의 노출 시간 (초)
+INTRO_DURATION = 4 # 인트로 이미지의 노출 시간 (초)
 WIDTH, HEIGHT = 1920, 1080 # 동영상 해상도 (가로 영상에 맞게 수정)
 
 # --- 경로 설정 ---
@@ -71,10 +75,10 @@ os.makedirs(SINGLE_CLIP_DIR, exist_ok=True)
 def create_intro_video(img_path, out_path, duration):
     """인트로 이미지를 사용하여 줌 효과가 적용된 비디오 클립을 생성합니다."""
     if not os.path.exists(img_path):
-        print(f"[오류] 인트로 이미지 파일 없음: {img_path}")
+        print(f"[오류] 인트로 이미지 파일 없음: {img_path}", flush=True)
         return None
 
-    print("1. 인트로 영상 제작 중...")
+    print("1. 인트로 영상 제작 중...", flush=True)
     cmd = [
         "ffmpeg", "-y", "-loop", "1", "-i", img_path,
         "-t", str(duration),
@@ -83,17 +87,17 @@ def create_intro_video(img_path, out_path, duration):
     ]
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='ignore')
-        print(f"   - 인트로 영상 저장 완료: {out_path}")
+        print(f"   - 인트로 영상 저장 완료: {out_path}", flush=True)
         return out_path
     except subprocess.CalledProcessError as e:
-        print(f"[오류] 인트로 영상 제작 실패: {e.stderr}")
+        print(f"[오류] 인트로 영상 제작 실패: {e.stderr}", flush=True)
         return None
 
 def create_card_videos(card_img_paths, duration):
     """카드 이미지들을 개별 비디오 클립으로 변환합니다."""
     video_clips = []
     total_cards = len(card_img_paths)
-    print(f"2. 총 {total_cards}개의 카드 이미지로 영상 제작 중...")
+    print(f"2. 총 {total_cards}개의 카드 이미지로 영상 제작 중...", flush=True)
 
     for idx, img_path in enumerate(card_img_paths):
         out_path = os.path.join(SINGLE_CLIP_DIR, f'card_{idx+1:02d}_{now_str}.mp4')
@@ -105,16 +109,16 @@ def create_card_videos(card_img_paths, duration):
         ]
         try:
             subprocess.run(cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='ignore')
-            print(f"   - 카드 영상 ({idx+1}/{total_cards}) 저장 완료: {out_path}")
+            print(f"   - 카드 영상 ({idx+1}/{total_cards}) 저장 완료: {out_path}", flush=True)
             video_clips.append(out_path)
         except subprocess.CalledProcessError as e:
-            print(f"[오류] 카드 영상({idx+1}) 제작 실패: {e.stderr}")
+            print(f"[오류] 카드 영상({idx+1}) 제작 실패: {e.stderr}", flush=True)
             continue
     return video_clips
 
 def merge_videos(video_paths, out_path):
     """생성된 모든 비디오 클립을 하나로 합칩니다."""
-    print("3. 모든 영상 클립 합치는 중...")
+    print("3. 모든 영상 클립 합치는 중...", flush=True)
     list_file_path = os.path.join(BASE_DIR, "video_list.txt")
     with open(list_file_path, "w", encoding="utf-8") as f:
         for v_path in video_paths:
@@ -126,9 +130,9 @@ def merge_videos(video_paths, out_path):
     ]
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='ignore')
-        print(f"   - 영상 합치기 완료: {out_path}")
+        print(f"   - 영상 합치기 완료: {out_path}", flush=True)
     except subprocess.CalledProcessError as e:
-        print(f"[오류] 영상 합치기 실패: {e.stderr}")
+        print(f"[오류] 영상 합치기 실패: {e.stderr}", flush=True)
     finally:
         if os.path.exists(list_file_path):
             os.remove(list_file_path)
@@ -136,12 +140,12 @@ def merge_videos(video_paths, out_path):
 def add_background_music(video_path, bgm_path, out_path, total_duration):
     """영상에 배경음악을 추가합니다."""
     if not os.path.exists(bgm_path):
-        print(f"[오류] 배경음악 파일 없음: {bgm_path}")
+        print(f"[오류] 배경음악 파일 없음: {bgm_path}", flush=True)
         # BGM 없이 파일 복사
         shutil.copy(video_path, out_path)
         return
 
-    print("4. 배경음악 추가 중 (페이드인/아웃 적용)...")
+    print("4. 배경음악 추가 중 (페이드인/아웃 적용)...", flush=True)
     cmd = [
         "ffmpeg", "-y", "-i", video_path,
         "-stream_loop", "-1", "-i", bgm_path,
@@ -152,13 +156,13 @@ def add_background_music(video_path, bgm_path, out_path, total_duration):
     ]
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='ignore')
-        print(f"   - 최종 영상 저장 완료: {out_path}")
+        print(f"   - 최종 영상 저장 완료: {out_path}", flush=True)
     except subprocess.CalledProcessError as e:
-        print(f"[오류] 배경음악 추가 실패: {e.stderr}")
+        print(f"[오류] 배경음악 추가 실패: {e.stderr}", flush=True)
 
 def cleanup(temp_dirs, temp_files):
     """임시 파일 및 폴더를 정리합니다."""
-    print("5. 임시 파일 정리 중...")
+    print("5. 임시 파일 정리 중...", flush=True)
     time.sleep(1) # 파일 핸들이 해제될 때까지 잠시 대기
 
     # 임시 폴더 삭제 (재시도 로직 추가)
@@ -169,22 +173,22 @@ def cleanup(temp_dirs, temp_files):
         for i in range(3): # 최대 3번 재시도
             try:
                 shutil.rmtree(d)
-                print(f"   - 임시 폴더 삭제: {d}")
+                print(f"   - 임시 폴더 삭제: {d}", flush=True)
                 break # 성공 시 루프 탈출
             except Exception as e:
-                print(f"   - 폴더 삭제 실패 (시도 {i+1}/3), 2초 후 재시도: {e}")
+                print(f"   - 폴더 삭제 실패 (시도 {i+1}/3), 2초 후 재시도: {e}", flush=True)
                 time.sleep(2)
         else: # for-else: 루프가 break 없이 끝나면 실행
-            print(f"[경고] 임시 폴더({d})를 자동으로 삭제하지 못했습니다. 수동으로 삭제해주세요.")
+            print(f"[경고] 임시 폴더({d})를 자동으로 삭제하지 못했습니다. 수동으로 삭제해주세요.", flush=True)
 
     # 임시 파일 삭제
     for f in temp_files:
         if os.path.exists(f):
             try:
                 os.remove(f)
-                print(f"   - 임시 파일 삭제: {f}")
+                print(f"   - 임시 파일 삭제: {f}", flush=True)
             except Exception as e:
-                print(f"[경고] 임시 파일({f})을 자동으로 삭제하지 못했습니다: {e}")
+                print(f"[경고] 임시 파일({f})을 자동으로 삭제하지 못했습니다: {e}", flush=True)
 
 if __name__ == "__main__":
     # --- 시작 전, 이전 최종 동영상 파일 삭제 ---
@@ -194,16 +198,16 @@ if __name__ == "__main__":
             if 'single_clips' not in os.path.dirname(file):
                 try:
                     os.remove(file)
-                    print(f"[이전 파일 삭제] {file}")
+                    print(f"[이전 파일 삭제] {file}", flush=True)
                 except OSError as e:
-                    print(f"[오류] 파일 삭제 실패: {file} ({e})")
+                    print(f"[오류] 파일 삭제 실패: {file} ({e})", flush=True)
     # ------------------------------------
 
     # parody_card 폴더에서 이미지 목록 가져오기 (이름순 정렬)
     card_images = sorted(glob.glob(os.path.join(CARD_IMG_DIR, '*.png')))
 
     if not card_images:
-        print("[오류] 'parody_card' 폴더에 이미지 파일이 없습니다. 스크립트를 종료합니다.")
+        print("[오류] 'parody_card' 폴더에 이미지 파일이 없습니다. 스크립트를 종료합니다.", flush=True)
     else:
         # 1. 인트로 영상 생성
         intro_clip = create_intro_video(INTRO_IMG_PATH, INTRO_CLIP_PATH, INTRO_DURATION)
@@ -227,6 +231,6 @@ if __name__ == "__main__":
                 temp_dirs=[SINGLE_CLIP_DIR],
                 temp_files=[MERGED_CLIP_PATH]
             )
-            print(f"\n🎉 모든 작업 완료! 최종 영상은 다음 경로에 저장되었습니다:\n{FINAL_VIDEO_PATH}")
+            print(f"\n🎉 모든 작업 완료! 최종 영상은 다음 경로에 저장되었습니다:\n{FINAL_VIDEO_PATH}", flush=True)
         else:
-            print("[오류] 생성된 영상 클립이 없어 동영상 제작을 중단합니다.") 
+            print("[오류] 생성된 영상 클립이 없어 동영상 제작을 중단합니다.", flush=True) 
