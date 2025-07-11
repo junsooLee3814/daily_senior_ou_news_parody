@@ -25,8 +25,8 @@ SENIOR_SEARCH_KEYWORDS = [
 ]
 
 VIRAL_SENIOR_HOOKS = [
-    "실화냐", "이게맞나", "세상에나", "아이고참", "말도안돼", 
-    "어이없네", "답답해", "화나네", "억울해"
+    "실화냐??", "이게맞나??", "세상에나!!!", "아이고참!!!", "말도안돼!!!", 
+    "어이없네!!", "답답해!!", "화나네!!", "억울해!!"
 ]
 
 def get_latest_parody_titles():
@@ -88,10 +88,10 @@ def generate_seo_optimized_title():
         
         title_templates = [
             f"연금 68세부터? {hook} {keyword} | {COUPANG_NOTICE}",
-            f"물가 또 올랐네 {hook} {keyword} | {COUPANG_NOTICE}",
-            f"전기료 폭탄 {hook} {keyword} | {COUPANG_NOTICE}",
-            f"의료비 인상 {hook} {keyword} | {COUPANG_NOTICE}",
-            f"치매 걱정돼 {hook} {keyword} | {COUPANG_NOTICE}"
+            f"물가 또 올랐네? {hook} {keyword} | {COUPANG_NOTICE}",
+            f"전기료 폭탄! {hook} {keyword} | {COUPANG_NOTICE}",
+            f"의료비 인상! {hook} {keyword} | {COUPANG_NOTICE}",
+            f"치매 걱정돼! {hook} {keyword} | {COUPANG_NOTICE}"
         ]
         title = random.choice(title_templates)
     
@@ -103,7 +103,9 @@ def generate_seo_optimized_title():
 
 def get_seo_optimized_description():
     """검색 최적화 + 쿠팡파트너스 의무준수 설명"""
-    today = datetime.now().strftime('%Y년 %m월 %d일')
+    import pytz
+    seoul_tz = pytz.timezone('Asia/Seoul')
+    today = datetime.now(seoul_tz).strftime('%Y년 %m월 %d일')
     
     # 설명 맨 앞에 쿠팡파트너스 문구 (법적 의무)
     description = f"""{COUPANG_NOTICE}
@@ -144,7 +146,7 @@ def get_seo_optimized_description():
 👨‍👩‍👧‍👦 가족들과 함께 보며 세대 소통하세요!
 💬 댓글로 여러분의 "라떼" 경험담도 공유해주세요!
 
-🔔 구독 + 좋아요 + 알림설정으로 매일 시니어뉴스 받아보세요!
+🔔 구독 + 좋아요 + 알림설정으로 매일 뉴스패러디 받아보세요!
 
 ⚠️ 면책조항:
 • 본 콘텐츠는 패러디/유머 목적입니다
@@ -214,7 +216,7 @@ def upload_video(file_path, title, description, tags):
             'title': title,
             'description': description,
             'tags': tags,
-            'categoryId': '25',  # 'News & Politics' 카테고리로 변경 (시니어뉴스에 적합)
+            'categoryId': '24',  # 'Entertainment' 카테고리로 변경 (시니어뉴스 패러디에 적합)
             'defaultLanguage': 'ko',  # 한국어 설정 (SEO 도움)
             'defaultAudioLanguage': 'ko'
         },
