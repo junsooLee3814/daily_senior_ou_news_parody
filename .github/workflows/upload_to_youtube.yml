@@ -35,8 +35,15 @@ jobs:
           echo "${{ secrets.YOUTUBE_CLIENT_SECRETS }}" > youtube_uploader/client_secrets.json
           printf "%s" '${{ secrets.YOUTUBE_TOKEN_JSON }}' > youtube_uploader/token.json
 
-      - name: 👀 Verify token.json content
-        run: cat youtube_uploader/token.json
+      - name: 👀 Check YouTube token file (json validity)
+        run: |
+          cat youtube_uploader/token.json
+          python -m json.tool < youtube_uploader/token.json
+
+      - name: 🐛 Check video file info before upload
+        run: |
+          ls -lh parody_video/
+          for f in parody_video/*.mp4; do ffprobe -v error -show_format -show_streams "$f" || true; done
 
       - name: 🚀 Upload to YouTube
         run: python youtube_uploader/upload_to_youtube.py
