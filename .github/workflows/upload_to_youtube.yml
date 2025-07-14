@@ -40,10 +40,16 @@ jobs:
           cat youtube_uploader/token.json
           python -m json.tool < youtube_uploader/token.json
 
+      - name: 🗄️ Check disk usage before video processing
+        run: df -h
+
       - name: 🐛 Check video file info before upload
         run: |
           ls -lh parody_video/
-          for f in parody_video/*.mp4; do ffprobe -v error -show_format -show_streams "$f" || true; done
+          for f in parody_video/*.mp4; do
+            sha256sum "$f"
+            ffprobe -v error -show_format -show_streams "$f" || true
+          done
 
       - name: 🚀 Upload to YouTube
         run: python youtube_uploader/upload_to_youtube.py
