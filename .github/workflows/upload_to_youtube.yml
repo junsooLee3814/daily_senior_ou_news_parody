@@ -40,6 +40,9 @@ jobs:
           cat youtube_uploader/token.json
           python -m json.tool < youtube_uploader/token.json
 
+      - name: 🎬 Install FFmpeg (for video info)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - name: 🗄️ Check disk usage before video processing
         run: df -h
 

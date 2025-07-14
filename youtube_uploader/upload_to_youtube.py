@@ -297,10 +297,10 @@ if __name__ == '__main__':
         # 업로드한 파일(latest_video)은 남기고, 나머지 .mp4 파일 삭제
         for f in glob.glob(os.path.join(video_dir, '*.mp4')):
             if os.path.abspath(f) != os.path.abspath(latest_video):
-                try:
+        try:
                     os.remove(f)
                     print(f"🗑️ 추가 파일 삭제 완료: {f}")
-                except Exception as e:
+        except Exception as e:
                     print(f"⚠️ 추가 파일 삭제 실패: {f} ({e})")
     else:
         print("❌ 업로드에 실패했습니다.")
