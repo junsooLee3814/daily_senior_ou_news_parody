@@ -10,10 +10,8 @@ jobs:
   generate_parody_video:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Récupération du code (LFS inclus)
+      - name: 📥 Récupération du code
         uses: actions/checkout@v4
-        with:
-          lfs: true
 
       - name: 🐍 Configuration de l'environnement Python
         uses: actions/setup-python@v4
@@ -42,10 +40,6 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          
-          # Configuration du suivi des fichiers vidéo avec Git LFS
-          git lfs track "parody_video/*.mp4"
-          git add .gitattributes
           
           # Ajout de la vidéo et des images de la carte d'information générées
           git add parody_video/*.mp4

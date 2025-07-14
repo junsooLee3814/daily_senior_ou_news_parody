@@ -66,7 +66,7 @@ def parse_rawdata(file_path='asset/rawdata.txt') -> Dict[str, Any]:
 # 구글 시트 설정
 WRITE_SHEET_NAME = 'senior_ou_news_parody_v3'
 DISCLAIMER = "면책조항 : 패러디/특정기관,개인과 무관/투자조언아님/재미목적"
-SOURCE_PREFIX = "https://gnews/" # 출처 URL 접두사
+# SOURCE_PREFIX = "https://gnews/" # 출처 URL 접두사  # 삭제
 
 def get_article_content(url: str) -> Optional[Dict[str, Any]]:
     """주어진 URL의 뉴스 본문을 스크래핑합니다."""
@@ -439,6 +439,8 @@ def save_results_to_gsheet(client, parody_data_list: List[Dict[str, Any]], sprea
         today_str = get_kst_now().strftime('%Y-%m-%d, %a').lower()
 
         for p_data in parody_data_list:
+            # original_link가 없으면 url 필드도 백업으로 저장
+            source_url = p_data.get('original_link', p_data.get('url', ''))
             row = [
                 today_str,
                 p_data.get('ou_title', ''),
@@ -446,7 +448,7 @@ def save_results_to_gsheet(client, parody_data_list: List[Dict[str, Any]], sprea
                 p_data.get('latte', ''),
                 p_data.get('ou_think', ''),
                 DISCLAIMER,
-                p_data.get('original_link', '')
+                source_url
             ]
             rows_to_upload.append(row)
         

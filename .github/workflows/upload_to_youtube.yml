@@ -10,15 +10,8 @@ jobs:
   upload_to_youtube:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Checkout repository with LFS
+      - name: 📥 Checkout repository
         uses: actions/checkout@v4
-        with:
-          lfs: true
-          # LFS pull을 위해 fetch-depth를 0으로 설정 (전체 히스토리 가져오기)
-          fetch-depth: 0
-
-      - name: ⚡️ Git LFS 파일 다운로드
-        run: git lfs pull
 
       - name: 🐍 Set up Python
         uses: actions/setup-python@v4

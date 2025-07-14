@@ -91,7 +91,12 @@ def generate_seo_optimized_title():
             f"물가 또 올랐네? {hook} {keyword} | {COUPANG_NOTICE}",
             f"전기료 폭탄! {hook} {keyword} | {COUPANG_NOTICE}",
             f"의료비 인상! {hook} {keyword} | {COUPANG_NOTICE}",
-            f"치매 걱정돼! {hook} {keyword} | {COUPANG_NOTICE}"
+            f"치매 걱정돼! {hook} {keyword} | {COUPANG_NOTICE}",
+            f"집값 또 뛰었네! {hook} {keyword} | {COUPANG_NOTICE}",
+            f"건강보험료 올라! {hook} {keyword} | {COUPANG_NOTICE}",
+            f"세금 더 내라고? {hook} {keyword} | {COUPANG_NOTICE}",
+            f"교통비도 인상! {hook} {keyword} | {COUPANG_NOTICE}",
+            f"식료품값 천정부지! {hook} {keyword} | {COUPANG_NOTICE}",
         ]
         title = random.choice(title_templates)
     
@@ -289,5 +294,13 @@ if __name__ == '__main__':
         print(f"📺 영상 URL: https://youtu.be/{video_id}")
         print(f"🔍 검색 최적화: 시니어뉴스, 라떼는말이야, 50대, 60대, 70대")
         print(f"⚖️ 쿠팡파트너스 의무사항 완료")
+        # 업로드한 파일(latest_video)은 남기고, 나머지 .mp4 파일 삭제
+        for f in glob.glob(os.path.join(video_dir, '*.mp4')):
+            if os.path.abspath(f) != os.path.abspath(latest_video):
+                try:
+                    os.remove(f)
+                    print(f"🗑️ 추가 파일 삭제 완료: {f}")
+                except Exception as e:
+                    print(f"⚠️ 추가 파일 삭제 실패: {f} ({e})")
     else:
         print("❌ 업로드에 실패했습니다.")
