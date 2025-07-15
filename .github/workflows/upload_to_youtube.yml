@@ -54,5 +54,12 @@ jobs:
             ffprobe -v error -show_format -show_streams "$f" || true
           done
 
+      - name: "🛠️ MP4 faststart 리패킹 (YouTube 업로드 호환)"
+        run: |
+          for f in parody_video/*.mp4; do
+            ffmpeg -y -i "$f" -c copy -movflags faststart "tmp.mp4"
+            mv "tmp.mp4" "$f"
+          done
+
       - name: 🚀 Upload to YouTube
         run: python youtube_uploader/upload_to_youtube.py
