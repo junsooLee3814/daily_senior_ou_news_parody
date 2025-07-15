@@ -46,19 +46,27 @@ jobs:
       - name: 🗄️ Check disk usage before video processing
         run: df -h
 
-      - name: 🐛 Check video file info before upload
+      - name: 🐛 Check video file info before re-encode
         run: |
-          ls -lh parody_video/
           for f in parody_video/*.mp4; do
+            echo "==== $f ===="
             sha256sum "$f"
             ffprobe -v error -show_format -show_streams "$f" || true
           done
 
-      - name: "🛠️ MP4 faststart 리패킹 (YouTube 업로드 호환)"
+      - name: "🛠️ MP4 re-encode for YouTube compatibility"
         run: |
           for f in parody_video/*.mp4; do
-            ffmpeg -y -i "$f" -c copy -movflags faststart "tmp.mp4"
+            ffmpeg -y -i "$f" -c:v libx264 -preset fast -profile:v high -level 4.2 -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart "tmp.mp4"
             mv "tmp.mp4" "$f"
+          done
+
+      - name: 🐛 Check video file info after re-encode
+        run: |
+          for f in parody_video/*.mp4; do
+            echo "==== $f ===="
+            sha256sum "$f"
+            ffprobe -v error -show_format -show_streams "$f" || true
           done
 
       - name: 🚀 Upload to YouTube

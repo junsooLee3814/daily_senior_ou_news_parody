@@ -7,6 +7,9 @@ from datetime import datetime
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+import time
+import httplib2
+from googleapiclient.errors import HttpError
 
 # 상위 폴더의 common_utils 모듈을 import하기 위한 경로 추가
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -200,57 +203,86 @@ def get_seo_optimized_tags():
     all_tags = list(dict.fromkeys(core_tags + issue_tags + content_tags + longtail_tags + search_tags))
     return all_tags[:49]  # 여유분 1개 남김
 
-def get_authenticated_service():
+def get_authenticated_service(http=None):
     """인증된 YouTube API 서비스 객체를 생성하여 반환합니다."""
     try:
         creds = Credentials.from_authorized_user_file('youtube_uploader/token.json', SCOPES)
-        return build('youtube', 'v3', credentials=creds)
+        return build('youtube', 'v3', credentials=creds, http=http)
     except Exception as e:
         print(f"YouTube 인증 오류: {e}")
         return None
 
-def upload_video(file_path, title, description, tags):
+def upload_video(file_path, title, description, tags, max_retries=3):
     """지정된 동영상 파일을 YouTube에 업로드합니다."""
-    youtube = get_authenticated_service()
+    # 네트워크 타임아웃 명시
+    http = httplib2.Http(timeout=60)
+    youtube = get_authenticated_service(http=http)
     if youtube is None:
         print("YouTube API 인증 실패. 업로드를 중단합니다.")
         return None
-    
+
     body = {
         'snippet': {
             'title': title,
             'description': description,
             'tags': tags,
-            'categoryId': '24',  # 'Entertainment' 카테고리로 변경 (시니어뉴스 패러디에 적합)
-            'defaultLanguage': 'ko',  # 한국어 설정 (SEO 도움)
+            'categoryId': '24',
+            'defaultLanguage': 'ko',
             'defaultAudioLanguage': 'ko'
         },
         'status': {
-            'privacyStatus': 'private',  # private으로 변경 (품질 관리 위해)
-            'selfDeclaredMadeForKids': False  # 성인 콘텐츠 명시
+            'privacyStatus': 'private',
+            'selfDeclaredMadeForKids': False
         }
     }
-    
-    try:
-        media = MediaFileUpload(file_path, chunksize=-1, resumable=True, mimetype='video/mp4')
-        request = youtube.videos().insert(
-            part=','.join(body.keys()),
-            body=body,
-            media_body=media
-        )
-        
-        response = None
-        print("🚀 시니어 뉴스 패러디 업로드를 시작합니다...")
-        while response is None:
+
+    media = MediaFileUpload(
+        file_path,
+        chunksize=1024*1024,  # 1MB
+        resumable=True,
+        mimetype='video/mp4'
+    )
+
+    request = youtube.videos().insert(
+        part=','.join(body.keys()),
+        body=body,
+        media_body=media
+    )
+
+    retry = 0
+    response = None
+    error = None
+    print(f"🚀 시니어 뉴스 패러디 업로드를 시작합니다... (파일: {file_path})")
+    while response is None:
+        try:
             status, response = request.next_chunk()
             if status:
                 print(f"업로드 진행률: {int(status.progress() * 100)}%")
-        
+        except HttpError as e:
+            if e.resp.status in [500, 502, 503, 504]:
+                error = f"서버 오류: {e.resp.status}, 재시도 중..."
+            else:
+                print(f"API 오류: {e}\n응답 내용: {e.content}")
+                break
+        except Exception as e:
+            error = f"예외 발생: {e}"
+        if error:
+            retry += 1
+            if retry > max_retries:
+                print(f"최대 재시도 횟수 초과. 업로드 실패: {error}")
+                return None
+            sleep_time = 2 ** retry
+            print(f"{error} {sleep_time}초 후 재시도...")
+            time.sleep(sleep_time)
+            error = None
+        else:
+            retry = 0
+    if response:
         print(f"✅ 업로드 성공! 영상 ID: {response['id']}")
-        print(f"🎬 YouTube Studio에서 확인: https://studio.youtube.com/video/{response['id']}/edit")
+        print(f"YouTube API 응답: {response}")
         return response['id']
-    except Exception as e:
-        print(f"❌ 동영상 업로드 중 오류 발생: {e}")
+    else:
+        print("❌ 업로드 실패: 응답 없음")
         return None
 
 if __name__ == '__main__':
@@ -302,5 +334,16 @@ if __name__ == '__main__':
                     print(f"🗑️ 추가 파일 삭제 완료: {f}")
                 except Exception as e:
                     print(f"⚠️ 추가 파일 삭제 실패: {f} ({e})")
+        # 업로드 후 YouTube API로 영상 정보 확인
+        try:
+            youtube = get_authenticated_service()
+            if youtube is not None:
+                video_info = youtube.videos().list(part="status,snippet,contentDetails", id=video_id).execute()
+                print("\n[업로드 후 YouTube 영상 정보]")
+                print(video_info)
+            else:
+                print("[업로드 후 영상 정보 조회 실패]: YouTube 인증 실패")
+        except Exception as e:
+            print(f"[업로드 후 영상 정보 조회 실패]: {e}")
     else:
         print("❌ 업로드에 실패했습니다.")
