@@ -203,20 +203,18 @@ def get_seo_optimized_tags():
     all_tags = list(dict.fromkeys(core_tags + issue_tags + content_tags + longtail_tags + search_tags))
     return all_tags[:49]  # 여유분 1개 남김
 
-def get_authenticated_service(http=None):
+def get_authenticated_service():
     """인증된 YouTube API 서비스 객체를 생성하여 반환합니다."""
     try:
         creds = Credentials.from_authorized_user_file('youtube_uploader/token.json', SCOPES)
-        return build('youtube', 'v3', credentials=creds, http=http)
+        return build('youtube', 'v3', credentials=creds)
     except Exception as e:
         print(f"YouTube 인증 오류: {e}")
         return None
 
 def upload_video(file_path, title, description, tags, max_retries=3):
     """지정된 동영상 파일을 YouTube에 업로드합니다."""
-    # 네트워크 타임아웃 명시
-    http = httplib2.Http(timeout=60)
-    youtube = get_authenticated_service(http=http)
+    youtube = get_authenticated_service()
     if youtube is None:
         print("YouTube API 인증 실패. 업로드를 중단합니다.")
         return None
@@ -334,16 +332,6 @@ if __name__ == '__main__':
                     print(f"🗑️ 추가 파일 삭제 완료: {f}")
                 except Exception as e:
                     print(f"⚠️ 추가 파일 삭제 실패: {f} ({e})")
-        # 업로드 후 YouTube API로 영상 정보 확인
-        try:
-            youtube = get_authenticated_service()
-            if youtube is not None:
-                video_info = youtube.videos().list(part="status,snippet,contentDetails", id=video_id).execute()
-                print("\n[업로드 후 YouTube 영상 정보]")
-                print(video_info)
-            else:
-                print("[업로드 후 영상 정보 조회 실패]: YouTube 인증 실패")
-        except Exception as e:
-            print(f"[업로드 후 영상 정보 조회 실패]: {e}")
+
     else:
         print("❌ 업로드에 실패했습니다.")
