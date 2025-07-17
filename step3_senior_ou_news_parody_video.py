@@ -233,5 +233,27 @@ if __name__ == "__main__":
                 temp_files=[MERGED_CLIP_PATH]
             )
             print(f"\n🎉 모든 작업 완료! 최종 영상은 다음 경로에 저장되었습니다:\n{FINAL_VIDEO_PATH}", flush=True)
+
+            # --- 최신 mp4 파일 1개만 남기고 나머지 삭제 ---
+            mp4_files = [f for f in glob.glob(os.path.join(VIDEO_OUT_DIR, '*.mp4')) if 'single_clips' not in os.path.dirname(f)]
+            if len(mp4_files) > 1:
+                # 파일 생성시간 기준 내림차순 정렬
+                mp4_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+                # 최신 파일 1개만 남기고 나머지 삭제
+                for old_file in mp4_files[1:]:
+                    try:
+                        os.remove(old_file)
+                        print(f"[자동정리] 오래된 mp4 파일 삭제: {old_file}", flush=True)
+                    except Exception as e:
+                        print(f"[경고] mp4 파일 삭제 실패: {old_file} ({e})", flush=True)
+
+            # --- single_clips 폴더 내부 mp4 파일 모두 삭제 ---
+            single_clips_mp4 = glob.glob(os.path.join(SINGLE_CLIP_DIR, '*.mp4'))
+            for clip_file in single_clips_mp4:
+                try:
+                    os.remove(clip_file)
+                    print(f"[자동정리] single_clips mp4 파일 삭제: {clip_file}", flush=True)
+                except Exception as e:
+                    print(f"[경고] single_clips mp4 파일 삭제 실패: {clip_file} ({e})", flush=True)
         else:
             print("[오류] 생성된 영상 클립이 없어 동영상 제작을 중단합니다.", flush=True) 

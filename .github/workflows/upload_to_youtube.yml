@@ -10,8 +10,15 @@ jobs:
   upload_to_youtube:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Checkout repository
+      - name: 📥 Checkout repository (with LFS)
         uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: 🗂️ Git LFS 설치 및 LFS 파일 pull
+        run: |
+          git lfs install
+          git lfs pull
 
       - name: 🐍 Set up Python
         uses: actions/setup-python@v4
