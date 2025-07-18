@@ -1,0 +1,54 @@
+name: YouTube Upload (Senior OU News Parody)
+
+on:
+  schedule:
+    - cron: '30 22 * * *'  # 매일 오전 7:30 KST
+  workflow_dispatch:
+
+jobs:
+  upload_to_youtube:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository (with LFS)
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Git LFS pull
+        run: |
+          git lfs install
+          git lfs pull
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: ./youtube_uploader
+        run: pip install -r requirements_youtube.txt
+
+      - name: Restore YouTube authentication files
+        run: |
+          mkdir -p youtube_uploader
+          echo "${{ secrets.YOUTUBE_CLIENT_SECRETS }}" > youtube_uploader/client_secrets.json
+          echo "${{ secrets.YOUTUBE_TOKEN_JSON }}" > youtube_uploader/token.json
+
+      - name: Restore Google Sheets authentication file
+        run: |
+          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" > service_account.json
+
+      - name: Check YouTube token file (json validity)
+        run: |
+          cat youtube_uploader/token.json
+          python -m json.tool < youtube_uploader/token.json
+
+      - name: Check Google Sheets credentials (json validity)
+        run: |
+          python -m json.tool < service_account.json
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Upload to YouTube
+        run: python youtube_uploader/upload_to_youtube.py
