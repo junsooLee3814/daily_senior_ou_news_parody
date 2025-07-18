@@ -393,12 +393,27 @@ if __name__ == '__main__':
         # 업로드 성공/실패와 관계없이 오래된 파일 정리
         print(f"\n🧹 오래된 동영상 파일 정리 중...")
         deleted_count = 0
+        
+        # GitHub Actions 환경인지 확인
+        is_github_actions = os.environ.get('GITHUB_ACTIONS') == 'true'
+        
         for f in glob.glob(os.path.join(video_dir, '*.mp4')):
             if os.path.abspath(f) != os.path.abspath(latest_video):
                 try:
-                    os.remove(f)
-                    deleted_count += 1
-                    print(f"🗑️ 파일 삭제 완료: {os.path.basename(f)}")
+                    if is_github_actions:
+                        # GitHub Actions에서는 Git 명령어로 삭제
+                        import subprocess
+                        result = subprocess.run(['git', 'rm', f], capture_output=True, text=True)
+                        if result.returncode == 0:
+                            deleted_count += 1
+                            print(f"🗑️ Git LFS 파일 삭제 완료: {os.path.basename(f)}")
+                        else:
+                            print(f"⚠️ Git LFS 파일 삭제 실패: {os.path.basename(f)} ({result.stderr})")
+                    else:
+                        # 로컬에서는 일반 파일 삭제
+                        os.remove(f)
+                        deleted_count += 1
+                        print(f"🗑️ 파일 삭제 완료: {os.path.basename(f)}")
                 except Exception as e:
                     print(f"⚠️ 파일 삭제 실패: {os.path.basename(f)} ({e})")
         

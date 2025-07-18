@@ -46,5 +46,11 @@ jobs:
           python -c "import json; json.load(open('youtube_uploader/token.json')); print('✅ token.json 유효함')"
           python -c "import json; json.load(open('youtube_uploader/client_secrets.json')); print('✅ client_secrets.json 유효함')"
 
+      - name: 🔧 Configure Git for LFS operations
+        run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          git lfs install
+
       - name: 🚀 Upload to YouTube
         run: python youtube_uploader/upload_to_youtube.py
