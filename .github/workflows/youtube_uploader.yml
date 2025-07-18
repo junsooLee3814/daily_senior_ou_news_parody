@@ -1,0 +1,134 @@
+name: YouTube Upload (Senior OU News Parody)
+
+on:
+  schedule:
+    - cron: '30 22 * * *'  # 매일 오전 7:30 KST
+  workflow_dispatch:
+
+jobs:
+  upload_to_youtube:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository (with LFS)
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Git LFS pull
+        run: |
+          git lfs install
+          git lfs pull
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: ./youtube_uploader
+        run: pip install -r requirements_youtube.txt
+
+      - name: Install additional dependencies
+        run: |
+          pip install google-auth-oauthlib
+          pip install google-auth-httplib2
+          pip install google-api-python-client
+
+      - name: Restore YouTube authentication files
+        run: |
+          mkdir -p youtube_uploader
+          echo "${{ secrets.YOUTUBE_CLIENT_SECRETS }}" > youtube_uploader/client_secrets.json
+          echo "${{ secrets.YOUTUBE_TOKEN_JSON }}" > youtube_uploader/token.json
+
+      - name: Restore Google Sheets authentication file
+        run: |
+          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" > service_account.json
+
+      - name: Auto-refresh YouTube token if needed
+        run: |
+          echo "=== YouTube 토큰 자동 새로고침 ==="
+          python -c "
+          import json
+          import os
+          from datetime import datetime
+          from google.oauth2.credentials import Credentials
+          from google.auth.transport.requests import Request
+          
+          try:
+              # 토큰 파일 존재 확인
+              if not os.path.exists('youtube_uploader/token.json'):
+                  print('❌ 토큰 파일이 없습니다.')
+                  exit(1)
+              
+              # 토큰 파일 크기 확인
+              token_size = os.path.getsize('youtube_uploader/token.json')
+              if token_size == 0:
+                  print('❌ 토큰 파일이 비어있습니다.')
+                  exit(1)
+              
+              print(f'📄 토큰 파일 크기: {token_size} bytes')
+              
+              # 토큰 로드
+              creds = Credentials.from_authorized_user_file('youtube_uploader/token.json', 
+                                                          ['https://www.googleapis.com/auth/youtube.upload'])
+              
+              print(f'📅 토큰 만료일: {creds.expiry}')
+              print(f'⏰ 현재 시간: {datetime.now()}')
+              
+              # 만료 체크 및 새로고침
+              if creds.expired and creds.refresh_token:
+                  print('🔄 토큰이 만료되었습니다. 새로고침을 시도합니다...')
+                  creds.refresh(Request())
+                  
+                  # 새로고침된 토큰 저장
+                  with open('youtube_uploader/token.json', 'w') as f:
+                      f.write(creds.to_json())
+                  print('✅ 토큰 새로고침 완료!')
+              elif not creds.valid:
+                  print('❌ 토큰이 유효하지 않습니다.')
+                  exit(1)
+              else:
+                  print('✅ 토큰이 유효합니다.')
+                  
+          except Exception as e:
+              print(f'❌ 토큰 처리 중 오류: {e}')
+              exit(1)
+          "
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Check video files and token status
+        run: |
+          echo "=== 업로드 준비 상태 확인 ==="
+          
+          # 비디오 파일 확인
+          echo "📹 비디오 파일 확인:"
+          if [ -d "parody_video" ]; then
+            find parody_video -name "*.mp4" -type f
+            echo "📊 파일 크기:"
+            for file in parody_video/*.mp4; do
+              if [ -f "$file" ]; then
+                size=$(du -h "$file" | cut -f1)
+                echo "$(basename "$file"): $size"
+              fi
+            done
+          else
+            echo "❌ parody_video 디렉토리가 없습니다."
+            exit 1
+          fi
+          
+          # 토큰 상태 확인
+          echo "🔑 토큰 상태 확인:"
+          python -c "
+          import json
+          token_data = json.load(open('youtube_uploader/token.json'))
+          print(f'권한 범위: {token_data.get(\"scopes\", \"없음\")}')
+          print(f'만료일: {token_data.get(\"expiry\", \"없음\")}')
+          print(f'리프레시 토큰: {\"있음\" if token_data.get(\"refresh_token\") else \"없음\"}')
+          "
+
+      - name: Upload to YouTube
+        run: python youtube_uploader/upload_to_youtube.py
+        env:
+          PYTHONUNBUFFERED: 1
