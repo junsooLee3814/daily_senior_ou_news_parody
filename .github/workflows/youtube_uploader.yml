@@ -23,11 +23,12 @@ jobs:
         working-directory: ./youtube_uploader
         run: pip install -r requirements_youtube.txt
 
-      - name: 🔐 Restore YouTube authentication files
+      - name: 🔐 Restore authentication files
         run: |
           mkdir -p youtube_uploader
           echo "${{ secrets.YOUTUBE_CLIENT_SECRETS }}" > youtube_uploader/client_secrets.json
           printf "%s" '${{ secrets.YOUTUBE_TOKEN_JSON }}' > youtube_uploader/token.json
+          echo "${{ secrets.GOOGLE_CREDENTIALS_JSON }}" > service_account.json
 
       - name: 👀 Verify token.json content
         run: cat youtube_uploader/token.json
