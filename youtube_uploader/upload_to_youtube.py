@@ -14,7 +14,7 @@ from googleapiclient.errors import HttpError
 
 # 상위 폴더의 common_utils 모듈을 import하기 위한 경로 추가
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from common_utils import get_gspread_client
+from common_utils import get_gsheet
 
 # 유튜브 업로드를 위한 권한 범위
 SCOPES = [
@@ -39,33 +39,22 @@ VIRAL_SENIOR_HOOKS = [
 def get_today_news_data():
     """구글 시트에서 오늘의 뉴스 데이터를 가져옵니다."""
     try:
-        config = {}
-        try:
-            with open('asset/rawdata.txt', 'r', encoding='utf-8') as f:
-                for line in f:
-                    if ':' in line:
-                        key, value = line.split(':', 1)
-                        config[key.strip()] = value.strip()
-        except FileNotFoundError:
-            return None, None, None
+        # 스프레드시트 ID와 시트명을 직접 지정 (성공한 방식)
+        SHEET_ID = '1yZeYdyGZpR6yrRn5JNa1-JdQtO9vKLX6NPWhqpmT6kw'
+        SHEET_NAME = 'senior_ou_news_parody_v3'
         
-        if '패러디결과_스프레드시트_ID' not in config:
-            return None, None, None
-        
-        g_client = get_gspread_client()
-        spreadsheet = g_client.open_by_key(config['패러디결과_스프레드시트_ID'])
-        worksheet = spreadsheet.worksheet('senior_ou_news_parody_v3')
+        worksheet = get_gsheet(SHEET_ID, SHEET_NAME)
+        all_values = worksheet.get_all_values()
         
         # 오늘 날짜 데이터만 필터링
         today_str = datetime.now().strftime('%Y-%m-%d, %a').lower()
-        all_data = worksheet.get_all_records()
         
-        # 오늘 생성된 첫 번째 뉴스 데이터 반환
-        for row in all_data:
-            if row.get('today') == today_str:
-                title = row.get('ou_title', '')
-                content = row.get('ou_content', '')
-                keyword = row.get('keyword', '')
+        # 헤더를 제외하고 데이터 검색
+        for i, row in enumerate(all_values[1:], 1):  # 첫 번째 행은 헤더
+            if len(row) >= 4 and row[0] == today_str:  # today 컬럼이 첫 번째라고 가정
+                title = row[1] if len(row) > 1 else ''  # ou_title 컬럼
+                content = row[2] if len(row) > 2 else ''  # ou_content 컬럼
+                keyword = row[3] if len(row) > 3 else ''  # keyword 컬럼
                 return title, content, keyword
         
         return None, None, None
