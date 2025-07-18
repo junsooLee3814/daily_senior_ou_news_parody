@@ -226,11 +226,24 @@ def get_authenticated_service():
         # 토큰 로드 및 검증
         creds = Credentials.from_authorized_user_file('youtube_uploader/token.json', SCOPES)
         
-        # 토큰 유효성 확인 (새로운 토큰이므로 만료 여부만 체크)
+        # 토큰 유효성 확인 및 자동 새로고침
         if not creds.valid:
-            print("❌ 토큰이 유효하지 않습니다.")
-            print("💡 새로운 토큰을 GitHub Secrets에 업데이트해주세요.")
-            return None
+            if creds.expired and creds.refresh_token:
+                print("🔄 토큰이 만료되었습니다. 자동 새로고침을 시도합니다...")
+                try:
+                    creds.refresh(Request())
+                    print("✅ 토큰 자동 새로고침 성공!")
+                    
+                    # 새로고침된 토큰 저장
+                    with open('youtube_uploader/token.json', 'w') as f:
+                        f.write(creds.to_json())
+                    print("💾 새로고침된 토큰 저장 완료")
+                except Exception as refresh_error:
+                    print(f"❌ 토큰 자동 새로고침 실패: {refresh_error}")
+                    return None
+            else:
+                print("❌ 토큰이 유효하지 않습니다.")
+                return None
         
         # YouTube API 서비스 생성
         youtube = build('youtube', 'v3', credentials=creds)
@@ -368,20 +381,25 @@ if __name__ == '__main__':
             tags
         )
         
+        # 업로드 성공/실패와 관계없이 오래된 파일 정리
+        print(f"\n🧹 오래된 동영상 파일 정리 중...")
+        deleted_count = 0
+        for f in glob.glob(os.path.join(video_dir, '*.mp4')):
+            if os.path.abspath(f) != os.path.abspath(latest_video):
+                try:
+                    os.remove(f)
+                    deleted_count += 1
+                    print(f"🗑️ 파일 삭제 완료: {os.path.basename(f)}")
+                except Exception as e:
+                    print(f"⚠️ 파일 삭제 실패: {os.path.basename(f)} ({e})")
+        
+        print(f"📊 정리 결과: {deleted_count}개 파일 삭제됨")
+        
         if video_id:
             print(f"\n🎉 SEO 최적화된 시니어 뉴스 패러디 업로드 완료!")
             print(f"📺 영상 URL: https://youtu.be/{video_id}")
             print(f"🔍 검색 최적화: 시니어뉴스, 라떼는말이야, 50대, 60대, 70대")
             print(f"⚖️ 쿠팡파트너스 의무사항 완료")
-            
-            # 업로드한 파일(latest_video)은 남기고, 나머지 .mp4 파일 삭제
-            for f in glob.glob(os.path.join(video_dir, '*.mp4')):
-                if os.path.abspath(f) != os.path.abspath(latest_video):
-                    try:
-                        os.remove(f)
-                        print(f"🗑️ 추가 파일 삭제 완료: {f}")
-                    except Exception as e:
-                        print(f"⚠️ 추가 파일 삭제 실패: {f} ({e})")
             
             # 성공 로그
             print(f"\n✅ 업로드 성공 로그:")
@@ -392,6 +410,7 @@ if __name__ == '__main__':
 
         else:
             print("❌ 업로드에 실패했습니다.")
+            print(f"💾 최신 파일은 보존됨: {os.path.basename(latest_video)}")
             exit(1)
             
     except Exception as e:
