@@ -35,22 +35,23 @@ print("1. 초기화 및 설정 로드...", flush=True)
 CARD_WIDTH = 1920
 CARD_HEIGHT = 1080
 LEFT_MARGIN = 100
-RIGHT_MARGIN = 100
-TOP_MARGIN = 200
+RIGHT_MARGIN = 15
+TOP_MARGIN = 230
 BOTTOM_MARGIN = 80 # 하단 여백 수정
-LINE_SPACING_RATIO = 1.3
+LINE_SPACING_RATIO = 1.2
 SECTION_GAP = 30
 
 # --- 폰트 크기 ---
 HEADER_FONT_SIZE = 35
 SECTION_TITLE_FONT_SIZE = 32 # 소제목용 폰트 크기
-OU_TITLE_FONT_SIZE = 65      # 키움
-LATTE_FONT_SIZE = 45         # 키움
-OU_THINK_FONT_SIZE = 55      # 키움
+OU_TITLE_FONT_SIZE = 60      # 키움
+LATTE_FONT_SIZE = 40         # 키움
+OU_THINK_FONT_SIZE = 50      # 키움
 FOOTER_FONT_SIZE = 30
 
 # --- 색상 ---
-WHITE_COLOR = (255, 255, 255)
+WHITE_COLOR = (255, 255, 255)  # 흰색으로 변경
+YELLOW_COLOR = (255, 255, 0)   # 노란색 (오유타이틀, 오유생각용)
 LIGHT_GRAY_COLOR = (200, 200, 200) # 소제목용 색상
 SHADOW_COLOR = (0, 0, 0, 128) # 반투명 검정
 
@@ -205,7 +206,7 @@ for i, (idx, row) in enumerate(df.iterrows()):
     print(f"\n- [{card_index+1}/{len(df)}] 카드 생성 중...", flush=True)
     
     # 카드 번호에 관계없이 항상 5.png 사용
-    bg_image_name = "5.png"
+    bg_image_name = "1.png"
 
     # 배경 이미지 로드
     background_path = SCRIPT_DIR / "asset" / bg_image_name
@@ -241,15 +242,16 @@ for i, (idx, row) in enumerate(df.iterrows()):
     y = draw_text_with_shadow(draw, (LEFT_MARGIN, y), "[오유_title]", section_title_font, LIGHT_GRAY_COLOR, max_text_width, line_spacing_ratio=LINE_SPACING_RATIO)
     y += 10
     ou_title = str(row.get('ou_title', ''))
-    y = draw_text_with_shadow(draw, (LEFT_MARGIN, y), ou_title, ou_title_font, WHITE_COLOR, max_text_width, line_spacing_ratio=LINE_SPACING_RATIO)
+    y = draw_text_with_shadow(draw, (LEFT_MARGIN, y), ou_title, ou_title_font, YELLOW_COLOR, max_text_width, line_spacing_ratio=LINE_SPACING_RATIO)
     y += SECTION_GAP
 
     # 5. [오유_생각] ou_think
     y = draw_text_with_shadow(draw, (LEFT_MARGIN, y), "[오유_생각]", section_title_font, LIGHT_GRAY_COLOR, max_text_width, line_spacing_ratio=LINE_SPACING_RATIO)
     y += 10
     ou_think = str(row.get('ou_think', ''))
-    y = draw_text_with_shadow(draw, (LEFT_MARGIN, y), ou_think, ou_think_font, WHITE_COLOR, max_text_width, line_spacing_ratio=LINE_SPACING_RATIO)
+    y = draw_text_with_shadow(draw, (LEFT_MARGIN, y), ou_think, ou_think_font, YELLOW_COLOR, max_text_width, line_spacing_ratio=LINE_SPACING_RATIO)
     y += SECTION_GAP
+    y += SECTION_GAP  # 오유생각 후 추가 줄간격
 
     # 6. 면책조항
     disclaimer = str(row.get('disclaimer', ''))

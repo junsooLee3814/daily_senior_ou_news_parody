@@ -5,6 +5,7 @@ import gspread
 import sys
 from datetime import datetime
 from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 import time
@@ -16,7 +17,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common_utils import get_gspread_client
 
 # 유튜브 업로드를 위한 권한 범위
-SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
+SCOPES = [
+    'https://www.googleapis.com/auth/youtube.upload',
+    'https://www.googleapis.com/auth/youtube.readonly'
+]
 
 # 쿠팡파트너스 공지사항 (법적 의무)
 COUPANG_NOTICE = "이 포스팅은 쿠팡파트너스 활동으로 일정보수를 지급받습니다."
@@ -206,10 +210,49 @@ def get_seo_optimized_tags():
 def get_authenticated_service():
     """인증된 YouTube API 서비스 객체를 생성하여 반환합니다."""
     try:
+        # 토큰 파일 존재 확인
+        if not os.path.exists('youtube_uploader/token.json'):
+            print("❌ 토큰 파일이 없습니다: youtube_uploader/token.json")
+            return None
+        
+        # 토큰 파일 크기 확인
+        token_size = os.path.getsize('youtube_uploader/token.json')
+        if token_size == 0:
+            print("❌ 토큰 파일이 비어있습니다.")
+            return None
+        
+        print(f"📄 토큰 파일 크기: {token_size} bytes")
+        
+        # 토큰 로드 및 검증
         creds = Credentials.from_authorized_user_file('youtube_uploader/token.json', SCOPES)
-        return build('youtube', 'v3', credentials=creds)
+        
+        # 토큰 유효성 확인 (새로운 토큰이므로 만료 여부만 체크)
+        if not creds.valid:
+            print("❌ 토큰이 유효하지 않습니다.")
+            print("💡 새로운 토큰을 GitHub Secrets에 업데이트해주세요.")
+            return None
+        
+        # YouTube API 서비스 생성
+        youtube = build('youtube', 'v3', credentials=creds)
+        
+        # 연결 테스트 (간단한 검증)
+        try:
+            request = youtube.channels().list(part='snippet', mine=True)
+            response = request.execute()
+            if response.get('items'):
+                channel_title = response['items'][0].get('snippet', {}).get('title', 'Unknown')
+                print(f"✅ YouTube API 연결 성공! 채널: {channel_title}")
+            else:
+                print("⚠️ 채널 정보를 가져올 수 없습니다. (업로드는 계속 진행)")
+        except Exception as test_error:
+            print(f"⚠️ 연결 테스트 실패 (업로드는 계속 진행): {test_error}")
+        
+        return youtube
+        
     except Exception as e:
-        print(f"YouTube 인증 오류: {e}")
+        print(f"❌ YouTube 인증 오류: {e}")
+        print(f"오류 타입: {type(e).__name__}")
+        print("💡 토큰 파일 형식을 확인해주세요.")
         return None
 
 def upload_video(file_path, title, description, tags, max_retries=3):
@@ -285,53 +328,73 @@ def upload_video(file_path, title, description, tags, max_retries=3):
 
 if __name__ == '__main__':
     print("🔍 오늘의 시니어 패러디 SEO 최적화 중...")
+    print(f"⏰ 실행 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    # SEO 최적화된 제목 생성 (쿠팡파트너스 의무준수)
-    title = generate_seo_optimized_title()
-    print(f"🎯 생성된 제목 ({len(title)}자): {title}")
-    
-    # SEO 최적화된 설명 생성 (쿠팡파트너스 맨 앞 배치)
-    description = get_seo_optimized_description()
-    tags = get_seo_optimized_tags()
-    
-    print(f"📝 설명 길이: {len(description)}자")
-    print(f"🏷️ 태그 수: {len(tags)}개")
-    print(f"🎯 타겟: 40-60대 SEO 최적화 완료")
-    print(f"⚖️ 쿠팡파트너스 의무사항 준수 완료")
-    
-    # 업로드할 영상 파일 찾기
-    video_dir = 'parody_video'
-    video_files = glob.glob(os.path.join(video_dir, '*.mp4'))
-    
-    if not video_files:
-        print(f"❌ '{video_dir}' 폴더에 업로드할 동영상 파일이 없습니다.")
-        exit(1)
-    
-    # 가장 최근 파일 선택
-    latest_video = max(video_files, key=os.path.getmtime)
-    print(f"📹 업로드할 동영상: {latest_video}")
-    
-    # 업로드 실행
-    video_id = upload_video(
-        latest_video,
-        title,
-        description,
-        tags
-    )
-    
-    if video_id:
-        print(f"\n🎉 SEO 최적화된 시니어 뉴스 패러디 업로드 완료!")
-        print(f"📺 영상 URL: https://youtu.be/{video_id}")
-        print(f"🔍 검색 최적화: 시니어뉴스, 라떼는말이야, 50대, 60대, 70대")
-        print(f"⚖️ 쿠팡파트너스 의무사항 완료")
-        # 업로드한 파일(latest_video)은 남기고, 나머지 .mp4 파일 삭제
-        for f in glob.glob(os.path.join(video_dir, '*.mp4')):
-            if os.path.abspath(f) != os.path.abspath(latest_video):
-                try:
-                    os.remove(f)
-                    print(f"🗑️ 추가 파일 삭제 완료: {f}")
-                except Exception as e:
-                    print(f"⚠️ 추가 파일 삭제 실패: {f} ({e})")
+    try:
+        # SEO 최적화된 제목 생성 (쿠팡파트너스 의무준수)
+        title = generate_seo_optimized_title()
+        print(f"🎯 생성된 제목 ({len(title)}자): {title}")
+        
+        # SEO 최적화된 설명 생성 (쿠팡파트너스 맨 앞 배치)
+        description = get_seo_optimized_description()
+        tags = get_seo_optimized_tags()
+        
+        print(f"📝 설명 길이: {len(description)}자")
+        print(f"🏷️ 태그 수: {len(tags)}개")
+        print(f"🎯 타겟: 40-60대 SEO 최적화 완료")
+        print(f"⚖️ 쿠팡파트너스 의무사항 준수 완료")
+        
+        # 업로드할 영상 파일 찾기
+        video_dir = 'parody_video'
+        video_files = glob.glob(os.path.join(video_dir, '*.mp4'))
+        
+        if not video_files:
+            print(f"❌ '{video_dir}' 폴더에 업로드할 동영상 파일이 없습니다.")
+            exit(1)
+        
+        # 가장 최근 파일 선택
+        latest_video = max(video_files, key=os.path.getmtime)
+        print(f"📹 업로드할 동영상: {latest_video}")
+        
+        # 파일 크기 확인
+        file_size = os.path.getsize(latest_video) / (1024 * 1024)  # MB
+        print(f"📊 파일 크기: {file_size:.1f} MB")
+        
+        # 업로드 실행
+        video_id = upload_video(
+            latest_video,
+            title,
+            description,
+            tags
+        )
+        
+        if video_id:
+            print(f"\n🎉 SEO 최적화된 시니어 뉴스 패러디 업로드 완료!")
+            print(f"📺 영상 URL: https://youtu.be/{video_id}")
+            print(f"🔍 검색 최적화: 시니어뉴스, 라떼는말이야, 50대, 60대, 70대")
+            print(f"⚖️ 쿠팡파트너스 의무사항 완료")
+            
+            # 업로드한 파일(latest_video)은 남기고, 나머지 .mp4 파일 삭제
+            for f in glob.glob(os.path.join(video_dir, '*.mp4')):
+                if os.path.abspath(f) != os.path.abspath(latest_video):
+                    try:
+                        os.remove(f)
+                        print(f"🗑️ 추가 파일 삭제 완료: {f}")
+                    except Exception as e:
+                        print(f"⚠️ 추가 파일 삭제 실패: {f} ({e})")
+            
+            # 성공 로그
+            print(f"\n✅ 업로드 성공 로그:")
+            print(f"   - 영상 ID: {video_id}")
+            print(f"   - 제목: {title}")
+            print(f"   - 파일: {os.path.basename(latest_video)}")
+            print(f"   - 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-    else:
-        print("❌ 업로드에 실패했습니다.")
+        else:
+            print("❌ 업로드에 실패했습니다.")
+            exit(1)
+            
+    except Exception as e:
+        print(f"❌ 예상치 못한 오류 발생: {e}")
+        print(f"오류 타입: {type(e).__name__}")
+        exit(1)
