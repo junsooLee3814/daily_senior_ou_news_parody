@@ -36,8 +36,8 @@ VIRAL_SENIOR_HOOKS = [
     "어이없네!!", "답답해!!", "화나네!!", "억울해!!"
 ]
 
-def get_latest_parody_titles():
-    """구글 시트에서 오늘 생성된 패러디 제목들을 가져옵니다."""
+def get_today_news_data():
+    """구글 시트에서 오늘의 뉴스 데이터를 가져옵니다."""
     try:
         config = {}
         try:
@@ -47,10 +47,10 @@ def get_latest_parody_titles():
                         key, value = line.split(':', 1)
                         config[key.strip()] = value.strip()
         except FileNotFoundError:
-            return []
+            return None, None, None
         
         if '패러디결과_스프레드시트_ID' not in config:
-            return []
+            return None, None, None
         
         g_client = get_gspread_client()
         spreadsheet = g_client.open_by_key(config['패러디결과_스프레드시트_ID'])
@@ -60,36 +60,33 @@ def get_latest_parody_titles():
         today_str = datetime.now().strftime('%Y-%m-%d, %a').lower()
         all_data = worksheet.get_all_records()
         
-        today_titles = []
+        # 오늘 생성된 첫 번째 뉴스 데이터 반환
         for row in all_data:
-            if row.get('today') == today_str and row.get('ou_title'):
-                today_titles.append(row['ou_title'])
+            if row.get('today') == today_str:
+                title = row.get('ou_title', '')
+                content = row.get('ou_content', '')
+                keyword = row.get('keyword', '')
+                return title, content, keyword
         
-        return today_titles[:5]  # 최대 5개만 반환
+        return None, None, None
     except Exception as e:
-        print(f"패러디 제목 가져오기 실패: {e}")
-        return []
+        print(f"뉴스 데이터 가져오기 실패: {e}")
+        return None, None, None
 
-def generate_seo_optimized_title():
-    """SEO 최적화 + 쿠팡파트너스 의무준수 제목 생성"""
-    parody_titles = get_latest_parody_titles()
-    
-    if parody_titles:
-        # 실제 패러디 제목 활용
-        selected_title = random.choice(parody_titles)
-        
+def generate_senior_engaging_title(title, keyword):
+    """50-70대 시니어에게 가장 관심있을 제목을 생성합니다."""
+    if title:
         # 제목 길이 제한 (YouTube 100자 제한 고려)
-        if len(selected_title) > 60:  # 쿠팡 문구 길이 고려
-            selected_title = selected_title[:60] + "..."
+        if len(title) > 60:  # 쿠팡 문구 길이 고려
+            title = title[:60] + "..."
         
-        # SEO 키워드 추가
+        # 시니어 관심 키워드 추가
         seo_keyword = random.choice(SENIOR_SEARCH_KEYWORDS)
         
-        # 제목 최적화: 핵심내용 + SEO키워드 + 쿠팡문구
-        title = f"{selected_title} {seo_keyword} | {COUPANG_NOTICE}"
-        
+        # 제목 최적화: 핵심내용 + 시니어키워드 + 쿠팡문구
+        final_title = f"{title} {seo_keyword} | {COUPANG_NOTICE}"
     else:
-        # 기본 템플릿 (검색 최적화)
+        # 시니어 관심 이슈 기본 템플릿
         hook = random.choice(VIRAL_SENIOR_HOOKS)
         keyword = random.choice(SENIOR_SEARCH_KEYWORDS)
         
@@ -105,16 +102,16 @@ def generate_seo_optimized_title():
             f"교통비도 인상! {hook} {keyword} | {COUPANG_NOTICE}",
             f"식료품값 천정부지! {hook} {keyword} | {COUPANG_NOTICE}",
         ]
-        title = random.choice(title_templates)
+        final_title = random.choice(title_templates)
     
     # 최종 길이 체크 (100자 제한)
-    if len(title) > 100:
-        title = title[:97] + "..."
+    if len(final_title) > 100:
+        final_title = final_title[:97] + "..."
     
-    return title
+    return final_title
 
-def get_seo_optimized_description():
-    """검색 최적화 + 쿠팡파트너스 의무준수 설명"""
+def get_senior_engaging_description(title, content, keyword):
+    """50-70대 시니어에게 가장 관심있을 설명을 생성합니다."""
     import pytz
     seoul_tz = pytz.timezone('Asia/Seoul')
     today = datetime.now(seoul_tz).strftime('%Y년 %m월 %d일')
@@ -124,15 +121,31 @@ def get_seo_optimized_description():
 
 🔥 {today} 시니어뉴스패러디 | 라떼는말이야 시리즈
 
-📺 50대 60대 70대 시니어가 "진짜 맞는 말이네!" 하는 현실공감 뉴스해석!
+📺 50대 60대 70대 시니어가 "진짜 맞는 말이네!" 하는 현실공감 뉴스해석!"""
+
+    # 오늘의 뉴스 내용이 있으면 추가
+    if content and isinstance(content, str):
+        # 내용이 너무 길면 요약
+        if len(content) > 200:
+            summary = content[:200] + "..."
+        else:
+            summary = content
+        
+        description += f"""
 
 ⭐ 오늘의 핵심 시니어 이슈:
-• 국민연금개혁 - 68세 수령, 우리 세대는?
-• 물가상승 - 라떼 한 잔이 5천원 시대
-• 의료비폭탄 - 아프면 안 되는 현실
-• 건강보험료 - 매년 오르는 부담
-• 요양보험 - 노후 돌봄 걱정
-• 치매예방 - 건강한 노후 준비
+{summary}"""
+    else:
+        description += f"""
+
+⭐ 오늘의 핵심 시니어 이슈:
+• {keyword} - 우리 세대가 가장 걱정하는 부분
+• 실시간 업데이트되는 상황과 전망
+• 전문가 분석과 시니어 관점 해석
+• 일반인이 궁금해하는 부분
+• 앞으로의 전개 방향과 대응책"""
+
+    description += f"""
 
 🎯 시니어세대 맞춤 콘텐츠:
 ✓ 복잡한 뉴스를 쉽고 재미있게 해석
@@ -170,8 +183,8 @@ def get_seo_optimized_description():
     
     return description
 
-def get_seo_optimized_tags():
-    """검색 최적화된 태그 (50개 한도 내, 중복 제거)"""
+def get_senior_engaging_tags():
+    """50-70대 시니어에게 가장 관심있을 태그를 생성합니다."""
     
     # 1순위: 핵심 시니어 키워드 (높은 검색량)
     core_tags = [
@@ -340,21 +353,28 @@ def upload_video(file_path, title, description, tags, max_retries=3):
         return None
 
 if __name__ == '__main__':
-    print("🔍 오늘의 시니어 패러디 SEO 최적화 중...")
+    print("🔍 오늘의 시니어 뉴스 독자 관심도 최적화 중...")
     print(f"⏰ 실행 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
     try:
-        # SEO 최적화된 제목 생성 (쿠팡파트너스 의무준수)
-        title = generate_seo_optimized_title()
-        print(f"🎯 생성된 제목 ({len(title)}자): {title}")
+        # 오늘의 뉴스 데이터 가져오기
+        title, content, keyword = get_today_news_data()
         
-        # SEO 최적화된 설명 생성 (쿠팡파트너스 맨 앞 배치)
-        description = get_seo_optimized_description()
-        tags = get_seo_optimized_tags()
+        if not title and not keyword:
+            print("❌ 오늘의 뉴스 데이터를 찾을 수 없습니다.")
+            exit(1)
+        
+        # 시니어 독자 관심도 최적화된 제목 생성
+        final_title = generate_senior_engaging_title(title, keyword)
+        print(f"🎯 생성된 제목 ({len(final_title)}자): {final_title}")
+        
+        # 시니어 독자 관심도 최적화된 설명 생성
+        description = get_senior_engaging_description(title, content, keyword)
+        tags = get_senior_engaging_tags()
         
         print(f"📝 설명 길이: {len(description)}자")
         print(f"🏷️ 태그 수: {len(tags)}개")
-        print(f"🎯 타겟: 40-60대 SEO 최적화 완료")
+        print(f"🎯 타겟: 50-70대 시니어 세대")
         print(f"⚖️ 쿠팡파트너스 의무사항 준수 완료")
         
         # 업로드할 영상 파일 찾기
@@ -376,7 +396,7 @@ if __name__ == '__main__':
         # 업로드 실행
         video_id = upload_video(
             latest_video,
-            title,
+            final_title,
             description,
             tags
         )
@@ -396,7 +416,7 @@ if __name__ == '__main__':
         print(f"📊 정리 결과: {deleted_count}개 파일 삭제됨")
         
         if video_id:
-            print(f"\n🎉 SEO 최적화된 시니어 뉴스 패러디 업로드 완료!")
+            print(f"\n🎉 시니어 독자 관심도 최적화된 뉴스 패러디 업로드 완료!")
             print(f"📺 영상 URL: https://youtu.be/{video_id}")
             print(f"🔍 검색 최적화: 시니어뉴스, 라떼는말이야, 50대, 60대, 70대")
             print(f"⚖️ 쿠팡파트너스 의무사항 완료")
@@ -404,7 +424,7 @@ if __name__ == '__main__':
             # 성공 로그
             print(f"\n✅ 업로드 성공 로그:")
             print(f"   - 영상 ID: {video_id}")
-            print(f"   - 제목: {title}")
+            print(f"   - 제목: {final_title}")
             print(f"   - 파일: {os.path.basename(latest_video)}")
             print(f"   - 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
