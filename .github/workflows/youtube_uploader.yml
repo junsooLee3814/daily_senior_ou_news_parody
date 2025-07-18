@@ -32,12 +32,16 @@ jobs:
       - name: 🔐 Restore authentication files
         run: |
           mkdir -p youtube_uploader
-          echo "${{ secrets.YOUTUBE_CLIENT_SECRETS }}" > youtube_uploader/client_secrets.json
+          printf "%s" '${{ secrets.YOUTUBE_CLIENT_SECRETS }}' > youtube_uploader/client_secrets.json
           printf "%s" '${{ secrets.YOUTUBE_TOKEN_JSON }}' > youtube_uploader/token.json
           printf "%s" '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > service_account.json
           
           # JSON 파일 검증
           echo "🔍 JSON 파일 검증 중..."
+          echo "📄 service_account.json 크기: $(wc -c < service_account.json) bytes"
+          echo "📄 token.json 크기: $(wc -c < youtube_uploader/token.json) bytes"
+          echo "📄 client_secrets.json 크기: $(wc -c < youtube_uploader/client_secrets.json) bytes"
+          
           python -c "import json; json.load(open('service_account.json')); print('✅ service_account.json 유효함')"
           python -c "import json; json.load(open('youtube_uploader/token.json')); print('✅ token.json 유효함')"
           python -c "import json; json.load(open('youtube_uploader/client_secrets.json')); print('✅ client_secrets.json 유효함')"
