@@ -15,6 +15,7 @@ jobs:
       YOUTUBE_CLIENT_SECRETS: ${{ secrets.YOUTUBE_CLIENT_SECRETS }}
       YOUTUBE_TOKEN_JSON: ${{ secrets.YOUTUBE_TOKEN_JSON }}
       CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+      TZ: Asia/Seoul
     steps:
       - name: 📥 Checkout repository with LFS
         uses: actions/checkout@v4

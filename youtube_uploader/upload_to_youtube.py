@@ -52,9 +52,16 @@ def get_today_news_data():
         
         print(f"📊 총 {len(all_values)}개 행 발견")
         
-        # 오늘 날짜 데이터만 필터링
-        today_str = datetime.now().strftime('%Y-%m-%d, %a').lower()
-        print(f"📅 오늘 날짜: {today_str}")
+        # 한국 시간대 사용 (GitHub Actions 환경 대응)
+        import pytz
+        seoul_tz = pytz.timezone('Asia/Seoul')
+        kst_now = datetime.now(seoul_tz)
+        
+        # 오늘 날짜 데이터만 필터링 (한국 시간 기준)
+        today_str = kst_now.strftime('%Y-%m-%d, %a').lower()
+        print(f"📅 한국 시간 기준 오늘 날짜: {today_str}")
+        print(f"   - UTC 시간: {datetime.now().strftime('%Y-%m-%d, %a').lower()}")
+        print(f"   - 시간대 차이: {kst_now.strftime('%H:%M:%S')} KST vs {datetime.now().strftime('%H:%M:%S')} UTC")
         
         # 헤더를 제외하고 데이터 검색
         found_data = False
@@ -76,9 +83,9 @@ def get_today_news_data():
             print(f"⚠️ 오늘({today_str}) 데이터를 찾을 수 없습니다.")
             print(f"💡 최근 데이터 확인 중...")
             
-            # 최근 3일 데이터 확인
+            # 최근 3일 데이터 확인 (한국 시간 기준)
             for days_back in range(1, 4):
-                check_date = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d, %a').lower()
+                check_date = (kst_now - timedelta(days=days_back)).strftime('%Y-%m-%d, %a').lower()
                 for i, row in enumerate(all_values[1:], 1):
                     if len(row) >= 4 and row[0] == check_date:
                         title = row[1] if len(row) > 1 else ''
@@ -97,6 +104,20 @@ def get_today_news_data():
             
             for date in sorted(list(available_dates))[-5:]:  # 최근 5개 날짜만 표시
                 print(f"   - {date}")
+            
+            # 최후의 수단: 가장 최근 데이터 사용
+            if available_dates:
+                latest_date = sorted(list(available_dates))[-1]
+                print(f"🆘 최후의 수단: 가장 최근 데이터 사용 ({latest_date})")
+                
+                for i, row in enumerate(all_values[1:], 1):
+                    if len(row) >= 4 and row[0] == latest_date:
+                        title = row[1] if len(row) > 1 else ''
+                        content = row[2] if len(row) > 2 else ''
+                        keyword = row[3] if len(row) > 3 else ''
+                        
+                        print(f"✅ 최근 데이터 사용: {latest_date}")
+                        return title, content, keyword
         
         return None, None, None
     except Exception as e:
