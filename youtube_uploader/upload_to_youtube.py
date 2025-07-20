@@ -3,7 +3,7 @@ import glob
 import random
 import gspread
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
@@ -43,23 +43,65 @@ def get_today_news_data():
         SHEET_ID = '1yZeYdyGZpR6yrRn5JNa1-JdQtO9vKLX6NPWhqpmT6kw'
         SHEET_NAME = 'senior_ou_news_parody_v3'
         
+        print(f"🔍 구글 시트에서 데이터 가져오는 중...")
+        print(f"   - 시트 ID: {SHEET_ID}")
+        print(f"   - 시트명: {SHEET_NAME}")
+        
         worksheet = get_gsheet(SHEET_ID, SHEET_NAME)
         all_values = worksheet.get_all_values()
         
+        print(f"📊 총 {len(all_values)}개 행 발견")
+        
         # 오늘 날짜 데이터만 필터링
         today_str = datetime.now().strftime('%Y-%m-%d, %a').lower()
+        print(f"📅 오늘 날짜: {today_str}")
         
         # 헤더를 제외하고 데이터 검색
+        found_data = False
         for i, row in enumerate(all_values[1:], 1):  # 첫 번째 행은 헤더
             if len(row) >= 4 and row[0] == today_str:  # today 컬럼이 첫 번째라고 가정
                 title = row[1] if len(row) > 1 else ''  # ou_title 컬럼
                 content = row[2] if len(row) > 2 else ''  # ou_content 컬럼
                 keyword = row[3] if len(row) > 3 else ''  # keyword 컬럼
+                
+                print(f"✅ 오늘 데이터 발견 (행 {i}):")
+                print(f"   - 제목: {title[:50]}...")
+                print(f"   - 내용: {content[:50]}...")
+                print(f"   - 키워드: {keyword}")
+                
+                found_data = True
                 return title, content, keyword
+        
+        if not found_data:
+            print(f"⚠️ 오늘({today_str}) 데이터를 찾을 수 없습니다.")
+            print(f"💡 최근 데이터 확인 중...")
+            
+            # 최근 3일 데이터 확인
+            for days_back in range(1, 4):
+                check_date = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d, %a').lower()
+                for i, row in enumerate(all_values[1:], 1):
+                    if len(row) >= 4 and row[0] == check_date:
+                        title = row[1] if len(row) > 1 else ''
+                        content = row[2] if len(row) > 2 else ''
+                        keyword = row[3] if len(row) > 3 else ''
+                        
+                        print(f"✅ {days_back}일 전 데이터 사용: {check_date}")
+                        return title, content, keyword
+            
+            print(f"❌ 최근 3일 데이터도 없습니다.")
+            print(f"📋 사용 가능한 날짜들:")
+            available_dates = set()
+            for row in all_values[1:]:
+                if len(row) > 0 and row[0]:
+                    available_dates.add(row[0])
+            
+            for date in sorted(list(available_dates))[-5:]:  # 최근 5개 날짜만 표시
+                print(f"   - {date}")
         
         return None, None, None
     except Exception as e:
-        print(f"뉴스 데이터 가져오기 실패: {e}")
+        print(f"❌ 뉴스 데이터 가져오기 실패: {e}")
+        print(f"오류 타입: {type(e).__name__}")
         return None, None, None
 
 def generate_senior_engaging_title(title, keyword):
@@ -345,13 +387,25 @@ if __name__ == '__main__':
     print("🔍 오늘의 시니어 뉴스 독자 관심도 최적화 중...")
     print(f"⏰ 실행 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
+    # GitHub Actions 환경 정보 출력
+    if os.environ.get('GITHUB_ACTIONS') == 'true':
+        print("🏗️ GitHub Actions 환경에서 실행 중")
+        print(f"   - 워크스페이스: {os.environ.get('GITHUB_WORKSPACE', 'N/A')}")
+        print(f"   - 러너 OS: {os.environ.get('RUNNER_OS', 'N/A')}")
+        print(f"   - 현재 디렉토리: {os.getcwd()}")
+        print(f"   - 환경 변수: GITHUB_ACTIONS={os.environ.get('GITHUB_ACTIONS')}")
+    else:
+        print("💻 로컬 환경에서 실행 중")
+    
     try:
         # 오늘의 뉴스 데이터 가져오기
         title, content, keyword = get_today_news_data()
         
         if not title and not keyword:
-            print("❌ 오늘의 뉴스 데이터를 찾을 수 없습니다.")
-            exit(1)
+            print("⚠️ 뉴스 데이터가 없어 기본 템플릿을 사용합니다.")
+            title = "시니어뉴스패러디"
+            content = "오늘의 시니어 관심 이슈"
+            keyword = "시니어뉴스"
         
         # 시니어 독자 관심도 최적화된 제목 생성
         final_title = generate_senior_engaging_title(title, keyword)
@@ -368,10 +422,46 @@ if __name__ == '__main__':
         
         # 업로드할 영상 파일 찾기
         video_dir = 'parody_video'
+        print(f"📁 비디오 디렉토리 확인: {video_dir}")
+        print(f"   - 절대 경로: {os.path.abspath(video_dir)}")
+        print(f"   - 디렉토리 존재: {os.path.exists(video_dir)}")
+        
+        if os.path.exists(video_dir):
+            print(f"   - 디렉토리 내용:")
+            try:
+                for item in os.listdir(video_dir):
+                    item_path = os.path.join(video_dir, item)
+                    if os.path.isfile(item_path):
+                        size = os.path.getsize(item_path) / (1024 * 1024)  # MB
+                        mtime = datetime.fromtimestamp(os.path.getmtime(item_path))
+                        print(f"     📄 {item} ({size:.1f}MB, {mtime.strftime('%Y-%m-%d %H:%M:%S')})")
+                    else:
+                        print(f"     📁 {item}/")
+            except Exception as e:
+                print(f"     ❌ 디렉토리 읽기 실패: {e}")
+        
         video_files = glob.glob(os.path.join(video_dir, '*.mp4'))
+        print(f"📹 발견된 MP4 파일: {len(video_files)}개")
         
         if not video_files:
             print(f"❌ '{video_dir}' 폴더에 업로드할 동영상 파일이 없습니다.")
+            print(f"💡 전체 디렉토리 검색 중...")
+            
+            # 전체 디렉토리에서 MP4 파일 검색
+            all_mp4_files = []
+            for root, dirs, files in os.walk('.'):
+                for file in files:
+                    if file.endswith('.mp4'):
+                        file_path = os.path.join(root, file)
+                        all_mp4_files.append(file_path)
+            
+            if all_mp4_files:
+                print(f"🔍 다른 위치에서 {len(all_mp4_files)}개 MP4 파일 발견:")
+                for file_path in all_mp4_files:
+                    size = os.path.getsize(file_path) / (1024 * 1024)  # MB
+                    mtime = datetime.fromtimestamp(os.path.getmtime(file_path))
+                    print(f"   📹 {file_path} ({size:.1f}MB, {mtime.strftime('%Y-%m-%d %H:%M:%S')})")
+            
             exit(1)
         
         # 가장 최근 파일 선택

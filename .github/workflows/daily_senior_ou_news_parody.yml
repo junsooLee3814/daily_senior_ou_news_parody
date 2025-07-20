@@ -6,17 +6,24 @@ on:
     - cron: '0 22 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   generate_parody_video:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Récupération du code
+      - name: 📥 Récupération du code avec LFS
         uses: actions/checkout@v4
+        with:
+          lfs: true
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 🐍 Configuration de l'environnement Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11' # Correspond à la version testée en local
+          python-version: '3.11'
 
       - name: 🎬 Installation de FFmpeg (pour la création vidéo)
         run: |
@@ -41,9 +48,30 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # Ajout de la vidéo et des images de la carte d'information générées
-          git add parody_video/*.mp4
-          git add parody_card/*.png
+          # LFS 상태 확인
+          git lfs status
+          
+          # 파일 존재 확인
+          echo "📁 parody_video 디렉토리 내용:"
+          ls -la parody_video/ || echo "parody_video 디렉토리가 없습니다."
+          
+          echo "📁 parody_card 디렉토리 내용:"
+          ls -la parody_card/ || echo "parody_card 디렉토리가 없습니다."
+          
+          # LFS 파일들을 Git에 추가
+          if [ -d "parody_video" ] && [ "$(ls -A parody_video/*.mp4 2>/dev/null)" ]; then
+            echo "🎬 비디오 파일 추가 중..."
+            git add parody_video/*.mp4
+          else
+            echo "⚠️ 추가할 비디오 파일이 없습니다."
+          fi
+          
+          if [ -d "parody_card" ] && [ "$(ls -A parody_card/*.png 2>/dev/null)" ]; then
+            echo "🃏 카드 이미지 추가 중..."
+            git add parody_card/*.png
+          else
+            echo "⚠️ 추가할 카드 이미지가 없습니다."
+          fi
           
           # Commit et push uniquement s'il y a des modifications
           if git diff --staged --quiet; then

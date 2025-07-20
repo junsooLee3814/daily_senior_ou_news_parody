@@ -42,6 +42,27 @@ jobs:
           python -c "import json; json.load(open('youtube_uploader/token.json')); print('✅ token.json 유효함')"
           python -c "import json; json.load(open('youtube_uploader/client_secrets.json')); print('✅ client_secrets.json 유효함')"
 
+      - name: 🔍 비디오 파일 확인
+        run: |
+          echo "📁 parody_video 디렉토리 확인 중..."
+          if [ -d "parody_video" ]; then
+            echo "✅ parody_video 디렉토리 존재"
+            ls -la parody_video/
+            
+            # MP4 파일 개수 확인
+            mp4_count=$(find parody_video -name "*.mp4" | wc -l)
+            echo "📹 MP4 파일 개수: $mp4_count"
+            
+            if [ $mp4_count -eq 0 ]; then
+              echo "❌ 업로드할 비디오 파일이 없습니다."
+              echo "💡 비디오 생성 워크플로우가 완료되었는지 확인하세요."
+              exit 1
+            fi
+          else
+            echo "❌ parody_video 디렉토리가 없습니다."
+            exit 1
+          fi
+
       - name: 🚀 Upload to YouTube
         run: python youtube_uploader/upload_to_youtube.py
 
