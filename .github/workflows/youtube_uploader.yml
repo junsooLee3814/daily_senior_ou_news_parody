@@ -21,6 +21,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           lfs: true
+          # LFS 파일만 필요한 경우 더 효율적
+          sparse-checkout: |
+            parody_video/
+            youtube_uploader/
+            common_utils.py
 
       - name: 🐍 Set up Python
         uses: actions/setup-python@v4
