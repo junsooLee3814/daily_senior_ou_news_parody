@@ -94,16 +94,28 @@ jobs:
             latest_file=$(find parody_video -name "*.mp4" -printf '%T@ %p\n' | sort -n | tail -1 | cut -f2- -d" ")
             echo "📹 최신 파일: $(basename "$latest_file")"
             
-            # 오래된 파일들 삭제
+            # 오래된 파일들 삭제 (LFS 파일 포함)
             deleted_count=0
             for file in parody_video/*.mp4; do
               if [ -f "$file" ] && [ "$file" != "$latest_file" ]; then
                 echo "🗑️ 삭제: $(basename "$file")"
+                # LFS 파일도 함께 삭제
+                git lfs untrack "$file" 2>/dev/null || true
                 rm "$file"
                 deleted_count=$((deleted_count + 1))
               fi
             done
             echo "✅ 정리 완료: $deleted_count개 파일 삭제됨"
+            
+            # Git에서 삭제된 파일들 커밋
+            if [ $deleted_count -gt 0 ]; then
+              echo "📝 Git에서 삭제된 파일들 커밋 중..."
+              git add -A
+              git config --local user.email "action@github.com"
+              git config --local user.name "GitHub Action"
+              git commit -m "🧹 오래된 비디오 파일 정리 - $deleted_count개 파일 삭제" || echo "⚠️ 커밋 실패 (변경사항 없음)"
+              git push || echo "⚠️ 푸시 실패"
+            fi
           else
             echo "⚠️ parody_video 디렉토리가 없습니다."
           fi
