@@ -79,5 +79,11 @@ jobs:
           else
             echo "🚀 Commit et push des modifications."
             git commit -m "🎬 Génération automatique : $(date '+%Y-%m-%d') Vidéo parodique Senior News"
+            
+            # 푸시 전에 최신 변경사항 가져오기
+            echo "📥 최신 변경사항 가져오는 중..."
+            git pull --rebase origin main || git pull origin main
+            
+            echo "📤 변경사항 푸시 중..."
             git push
           fi 
