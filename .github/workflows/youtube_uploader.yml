@@ -51,8 +51,12 @@ jobs:
       - name: 🔍 비디오 파일 확인
         run: |
           echo "📁 parody_video 디렉토리 확인 중..."
+          echo "⏰ 현재 시간: $(date)"
+          echo "🌍 시간대: $(date +%Z)"
+          
           if [ -d "parody_video" ]; then
             echo "✅ parody_video 디렉토리 존재"
+            echo "📋 디렉토리 내용:"
             ls -la parody_video/
             
             # MP4 파일 개수 확인
@@ -64,6 +68,16 @@ jobs:
               echo "💡 비디오 생성 워크플로우가 완료되었는지 확인하세요."
               exit 1
             fi
+            
+            # 파일별 상세 정보 출력
+            echo "📊 MP4 파일 상세 정보:"
+            for file in parody_video/*.mp4; do
+              if [ -f "$file" ]; then
+                size=$(du -h "$file" | cut -f1)
+                mtime=$(stat -c %y "$file")
+                echo "   📹 $(basename "$file") - 크기: $size, 수정시간: $mtime"
+              fi
+            done
           else
             echo "❌ parody_video 디렉토리가 없습니다."
             exit 1

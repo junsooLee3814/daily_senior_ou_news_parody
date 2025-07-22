@@ -83,8 +83,8 @@ def get_today_news_data():
             print(f"⚠️ 오늘({today_str}) 데이터를 찾을 수 없습니다.")
             print(f"💡 최근 데이터 확인 중...")
             
-            # 최근 3일 데이터 확인 (한국 시간 기준)
-            for days_back in range(1, 4):
+            # 최근 7일 데이터 확인 (한국 시간 기준) - 더 넓은 범위
+            for days_back in range(1, 8):
                 check_date = (kst_now - timedelta(days=days_back)).strftime('%Y-%m-%d, %a').lower()
                 for i, row in enumerate(all_values[1:], 1):
                     if len(row) >= 4 and row[0] == check_date:
@@ -93,6 +93,8 @@ def get_today_news_data():
                         keyword = row[3] if len(row) > 3 else ''
                         
                         print(f"✅ {days_back}일 전 데이터 사용: {check_date}")
+                        print(f"   - 제목: {title[:50]}...")
+                        print(f"   - 내용: {content[:50]}...")
                         return title, content, keyword
             
             print(f"❌ 최근 3일 데이터도 없습니다.")
@@ -485,9 +487,20 @@ if __name__ == '__main__':
             
             exit(1)
         
-        # 가장 최근 파일 선택
+        # 가장 최근 파일 선택 (수정된 시간 기준)
         latest_video = max(video_files, key=os.path.getmtime)
-        print(f"📹 업로드할 동영상: {latest_video}")
+        latest_mtime = os.path.getmtime(latest_video)
+        latest_datetime = datetime.fromtimestamp(latest_mtime)
+        
+        print(f"📹 발견된 모든 MP4 파일:")
+        for video_file in sorted(video_files, key=os.path.getmtime, reverse=True):
+            mtime = os.path.getmtime(video_file)
+            file_datetime = datetime.fromtimestamp(mtime)
+            size = os.path.getsize(video_file) / (1024 * 1024)  # MB
+            print(f"   📹 {os.path.basename(video_file)} ({size:.1f}MB, {file_datetime.strftime('%Y-%m-%d %H:%M:%S')})")
+        
+        print(f"📹 선택된 최신 동영상: {latest_video}")
+        print(f"📅 파일 생성 시간: {latest_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
         
         # 파일 크기 확인
         file_size = os.path.getsize(latest_video) / (1024 * 1024)  # MB
