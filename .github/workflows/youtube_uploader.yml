@@ -90,13 +90,32 @@ jobs:
         run: |
           echo "🧹 오래된 비디오 파일 정리 중..."
           if [ -d "parody_video" ]; then
-            # 가장 최근 파일 찾기 (수정 시간 기준)
-            echo "📊 파일별 수정 시간 확인:"
-            find parody_video -name "*.mp4" -printf '%T@ %T+ %p\n' | sort -nr | while read timestamp time_str filepath; do
-              echo "   📹 $(basename "$filepath") - 수정시간: $time_str"
+            # 가장 최근 파일 찾기 (파일명 기준)
+            echo "📊 파일별 생성 시간 확인:"
+            for file in parody_video/*.mp4; do
+              if [ -f "$file" ]; then
+                filename=$(basename "$file")
+                # 파일명에서 날짜/시간 추출 (senior_ou_news_parody_20250721_072003.mp4)
+                date_part=$(echo "$filename" | grep -o '2025[0-9]{4}_[0-9]{6}' | head -1)
+                if [ -n "$date_part" ]; then
+                  echo "   📹 $filename - 생성시간: $date_part"
+                else
+                  echo "   📹 $filename - 시간정보 없음"
+                fi
+              fi
             done
             
-            latest_file=$(find parody_video -name "*.mp4" -printf '%T@ %p\n' | sort -nr | head -1 | cut -f2- -d" ")
+            # 파일명 기준으로 최신 파일 찾기 (날짜+시간 역순 정렬)
+            latest_file=$(find parody_video -name "*.mp4" | while read file; do
+              filename=$(basename "$file")
+              date_part=$(echo "$filename" | grep -o '2025[0-9]{4}_[0-9]{6}' | head -1)
+              if [ -n "$date_part" ]; then
+                echo "$date_part $file"
+              else
+                echo "00000000000000 $file"  # 시간정보 없는 파일은 맨 뒤로
+              fi
+            done | sort -r | head -1 | cut -d' ' -f2-)
+            
             echo "📹 선택된 최신 파일: $(basename "$latest_file")"
             
             # 오래된 파일들 삭제 (LFS 파일 포함)
