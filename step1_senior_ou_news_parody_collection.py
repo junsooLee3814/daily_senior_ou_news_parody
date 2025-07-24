@@ -406,7 +406,7 @@ def save_results_to_gsheet(client, parody_data_list: List[Dict[str, Any]], sprea
             logger.info(f"새 워크시트 '{worksheet_name}'를 생성했습니다.")
 
         # 헤더 정의
-        headers = ['today', 'ou_title', 'original_title', 'latte', 'ou_think', 'disclaimer', 'source_url']
+        headers = ['today', 'ou_title', 'original_title', 'latte', 'ou_think', 'disclaimer', 'source_url', 'article_content']
         
         if not parody_data_list:
             logger.info("구글 시트에 추가할 데이터가 없습니다.")
@@ -423,6 +423,8 @@ def save_results_to_gsheet(client, parody_data_list: List[Dict[str, Any]], sprea
         for p_data in parody_data_list:
             # original_link가 없으면 url 필드도 백업으로 저장
             source_url = p_data.get('original_link', p_data.get('url', ''))
+            # 기사 원문 (최대 1000자로 제한)
+            article_content = p_data.get('text', '')[:1000] if p_data.get('text') else ''
             row = [
                 today_str,
                 p_data.get('ou_title', ''),
@@ -430,7 +432,8 @@ def save_results_to_gsheet(client, parody_data_list: List[Dict[str, Any]], sprea
                 p_data.get('latte', ''),
                 p_data.get('ou_think', ''),
                 DISCLAIMER,
-                source_url
+                source_url,
+                article_content
             ]
             rows_to_upload.append(row)
         

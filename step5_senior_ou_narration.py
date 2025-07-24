@@ -70,6 +70,11 @@ def make_compact_prompt(news, idx, total):
         if idx < total-1 else
         "마무리는 '이상 오늘의 유머 뉴스패러디를 모두 전해드렸습니다. 끝까지 들어 주셔서 감사합니다. 다음에 뵐때까지 즐거운 마음으로 건강히 지내세요!' 등 전체 종료 멘트로 마무리해줘."
     )
+    
+    # 기사 원문이 있으면 포함, 없으면 생략
+    article_content = news.get('article_content', '')
+    article_section = f"\n기사 원문: {article_content}" if article_content else ""
+    
     return f"""
 아래 4개 필드를 활용해서, 50초 내외로 아주 간결하고 임팩트 있게 시니어를 위한 오늘의 유머 뉴스패러디 내레이션 스크립트를 만들어줘.
 - 각 뉴스는 반드시 '오늘의 유머 {news_num} 입니다.'로 시작해줘.
@@ -82,7 +87,7 @@ def make_compact_prompt(news, idx, total):
 ou_title: {news['ou_title']}
 original_title: {news['original_title']}
 latte: {news['latte']}
-ou_think: {news['ou_think']}"""
+ou_think: {news['ou_think']}{article_section}"""
 
 # Claude 3.5 Sonnet 호출
 def call_claude(prompt):
