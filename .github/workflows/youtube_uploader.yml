@@ -2,8 +2,8 @@ name: YouTube Upload (Senior OU News Parody)
 
 on:
   schedule:
-    # 매일 오전 7:30 KST (전날 22:30 UTC)에 실행
-    - cron: '30 22 * * *'
+    # 매일 오전 6:30 KST (전날 21:30 UTC)에 실행
+    - cron: '30 21 * * *'
   workflow_dispatch:
 
 jobs:
@@ -154,4 +154,5 @@ jobs:
         run: |
           echo "🧹 Cleaning up Git LFS storage..."
           git lfs prune --force
+
           echo "✅ LFS cleanup complete" 
