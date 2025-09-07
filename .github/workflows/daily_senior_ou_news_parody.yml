@@ -2,8 +2,8 @@ name: Senior OU News Parody Video Generation
 
 on:
   schedule:
-    # 매일 오전 7시 KST (22:00 UTC)에 실행
-    - cron: '0 22 * * *'
+    # 매일 오전 6시 KST (21:00 UTC)에 실행
+    - cron: '0 21 * * *'
   workflow_dispatch:
 
 permissions:
