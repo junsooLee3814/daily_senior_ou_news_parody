@@ -1,0 +1,157 @@
+name: YouTube Upload (Senior OU News Parody)
+
+on:
+  schedule:
+    # 매일 오전 7:30 KST (전날 22:30 UTC)에 실행
+    - cron: '30 22 * * *'
+  workflow_dispatch:
+
+jobs:
+  upload_to_youtube:
+    runs-on: ubuntu-latest
+    env:
+      GSHEET_ID: ${{ secrets.GSHEET_ID }}
+      GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+      YOUTUBE_CLIENT_SECRETS: ${{ secrets.YOUTUBE_CLIENT_SECRETS }}
+      YOUTUBE_TOKEN_JSON: ${{ secrets.YOUTUBE_TOKEN_JSON }}
+      CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+      TZ: Asia/Seoul
+    steps:
+      - name: 📥 Checkout repository with LFS
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0  # 전체 히스토리 가져오기
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install dependencies
+        run: pip install -r youtube_uploader/requirements_youtube.txt
+
+      - name: 🔐 Restore authentication files
+        run: |
+          mkdir -p youtube_uploader
+          printf "%s" '${{ secrets.YOUTUBE_CLIENT_SECRETS }}' > youtube_uploader/client_secrets.json
+          printf "%s" '${{ secrets.YOUTUBE_TOKEN_JSON }}' > youtube_uploader/token.json
+          printf "%s" '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > service_account.json
+          
+          # JSON 파일 검증
+          echo "🔍 JSON 파일 검증 중..."
+          python -c "import json; json.load(open('service_account.json')); print('✅ service_account.json 유효함')"
+          python -c "import json; json.load(open('youtube_uploader/token.json')); print('✅ token.json 유효함')"
+          python -c "import json; json.load(open('youtube_uploader/client_secrets.json')); print('✅ client_secrets.json 유효함')"
+
+      - name: 🔍 Check video files
+        run: |
+          echo "📁 parody_video directory check..."
+          echo "⏰ Current time: $(date)"
+          echo "🌍 Timezone: $(date +%Z)"
+          
+          if [ -d "parody_video" ]; then
+            echo "✅ parody_video directory exists"
+            echo "📋 Directory contents:"
+            ls -la parody_video/
+            
+            # Count MP4 files
+            mp4_count=$(find parody_video -name "*.mp4" | wc -l)
+            echo "📹 MP4 file count: $mp4_count"
+            
+            if [ $mp4_count -eq 0 ]; then
+              echo "❌ No video files to upload."
+              echo "💡 Please check if video generation workflow completed."
+              exit 1
+            fi
+            
+            # Detailed file information
+            echo "📊 MP4 file details:"
+            for file in parody_video/*.mp4; do
+              if [ -f "$file" ]; then
+                size=$(du -h "$file" | cut -f1)
+                mtime=$(stat -c %y "$file")
+                echo "   📹 $(basename "$file") - Size: $size, Modified: $mtime"
+              fi
+            done
+          else
+            echo "❌ parody_video directory not found."
+            exit 1
+          fi
+
+      - name: 🚀 Upload to YouTube
+        run: |
+          echo "🔍 Environment check:"
+          echo "Current directory: $(pwd)"
+          echo "Contents: $(ls -la)"
+          echo "youtube_uploader/upload_to_youtube.py exists: $(test -f youtube_uploader/upload_to_youtube.py && echo 'YES' || echo 'NO')"
+          
+          echo "🐍 Python environment:"
+          echo "Python version: $(python --version)"
+          
+          echo "🚀 Starting YouTube upload (no utils dependency)..."
+          python youtube_uploader/upload_to_youtube.py
+
+      - name: 🧹 Clean up old video files
+        run: |
+          echo "🧹 Cleaning up old video files..."
+          if [ -d "parody_video" ]; then
+            # Find latest file (by filename)
+            echo "📊 File creation time check:"
+            for file in parody_video/*.mp4; do
+              if [ -f "$file" ]; then
+                filename=$(basename "$file")
+                # Extract date/time from filename (senior_ou_news_parody_20250721_072003.mp4)
+                date_part=$(echo "$filename" | grep -o '2025[0-9]{4}_[0-9]{6}' | head -1)
+                if [ -n "$date_part" ]; then
+                  echo "   📹 $filename - Created: $date_part"
+                else
+                  echo "   📹 $filename - No time info"
+                fi
+              fi
+            done
+            
+            # Find latest file by filename (date+time reverse sort)
+            latest_file=$(find parody_video -name "*.mp4" | while read file; do
+              filename=$(basename "$file")
+              date_part=$(echo "$filename" | grep -o '2025[0-9]{4}_[0-9]{6}' | head -1)
+              if [ -n "$date_part" ]; then
+                echo "$date_part $file"
+              else
+                echo "00000000000000 $file"  # Files without time info go to end
+              fi
+            done | sort -r | head -1 | cut -d' ' -f2-)
+            
+            echo "📹 Selected latest file: $(basename "$latest_file")"
+            
+            # Delete old files (including LFS files)
+            deleted_count=0
+            for file in parody_video/*.mp4; do
+              if [ -f "$file" ] && [ "$file" != "$latest_file" ]; then
+                echo "🗑️ Deleting: $(basename "$file")"
+                # Remove from LFS too
+                git lfs untrack "$file" 2>/dev/null || true
+                rm "$file"
+                deleted_count=$((deleted_count + 1))
+              fi
+            done
+            echo "✅ Cleanup complete: $deleted_count files deleted"
+            
+            # Commit deleted files to Git
+            if [ $deleted_count -gt 0 ]; then
+              echo "📝 Committing deleted files to Git..."
+              git add -A
+              git config --local user.email "action@github.com"
+              git config --local user.name "GitHub Action"
+              git commit -m "🧹 Cleaned up old video files - $deleted_count files deleted" || echo "⚠️ Commit failed (no changes)"
+              git push || echo "⚠️ Push failed"
+            fi
+          else
+            echo "⚠️ parody_video directory not found."
+          fi
+
+      - name: 🧹 Clean up LFS storage
+        run: |
+          echo "🧹 Cleaning up Git LFS storage..."
+          git lfs prune --force
+          echo "✅ LFS cleanup complete" 
