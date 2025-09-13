@@ -74,8 +74,8 @@ try:
         from newspaper import Article, Config
         NEWSPAPER_AVAILABLE = True
         print("✅ newspaper3k 패키지 import 성공")
-    except ImportError:
-        print("⚠️  newspaper3k 패키지가 설치되지 않았습니다.")
+    except ImportError as e:
+        print(f"⚠️  newspaper3k 패키지 import 실패: {e}")
         print("   다음 명령어로 설치하세요:")
         print("   pip install newspaper3k")
         print("   또는")

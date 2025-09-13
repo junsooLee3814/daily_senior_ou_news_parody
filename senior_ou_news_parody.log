@@ -1,0 +1,47 @@
+2025-09-13 09:26:37,210 - INFO - Note: NumExpr detected 18 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 16.
+2025-09-13 09:26:37,211 - INFO - NumExpr defaulting to 16 threads.
+2025-09-13 09:26:37,795 - INFO - 설정 파일(asset/rawdata.txt) 로드 중...
+2025-09-13 09:26:37,796 - INFO - 설정 파일 로드 완료: RSS URL 6개
+2025-09-13 09:26:37,796 - INFO - RSS 피드에서 뉴스 수집 중...
+2025-09-13 09:26:37,797 - INFO - RSS 피드 확인 중: https://www.yna.co.kr/rss/opinion.xml
+2025-09-13 09:26:37,797 - INFO - RSS 피드 확인 중: https://www.yna.co.kr/rss/health.xml
+2025-09-13 09:26:37,799 - INFO - RSS 피드 확인 중: https://www.yna.co.kr/rss/market.xml
+2025-09-13 09:26:37,801 - INFO - RSS 피드 확인 중: https://www.yna.co.kr/rss/politics.xml
+2025-09-13 09:26:37,802 - INFO - RSS 피드 확인 중: https://www.yna.co.kr/rss/economy.xml
+2025-09-13 09:26:38,056 - INFO - RSS 피드 https://www.yna.co.kr/rss/opinion.xml에서 26개 뉴스 수집
+2025-09-13 09:26:38,058 - INFO - RSS 피드 확인 중: https://www.yna.co.kr/rss/local.xml
+2025-09-13 09:26:38,167 - INFO - RSS 피드 https://www.yna.co.kr/rss/market.xml에서 120개 뉴스 수집
+2025-09-13 09:26:38,255 - INFO - RSS 피드 https://www.yna.co.kr/rss/economy.xml에서 120개 뉴스 수집
+2025-09-13 09:26:38,342 - INFO - RSS 피드 https://www.yna.co.kr/rss/health.xml에서 120개 뉴스 수집
+2025-09-13 09:26:38,425 - INFO - RSS 피드 https://www.yna.co.kr/rss/politics.xml에서 120개 뉴스 수집
+2025-09-13 09:26:38,521 - INFO - RSS 피드 https://www.yna.co.kr/rss/local.xml에서 120개 뉴스 수집
+2025-09-13 09:26:38,522 - INFO - 총 570개의 고유한 뉴스를 발견했습니다.
+2025-09-13 09:26:38,533 - INFO - 시니어(50/60/70대) 맞춤 뉴스 중요도 평가 및 상위 선정...
+2025-09-13 09:26:38,534 - INFO -   - 1위 (점수: 31.0): 국민연금, 국내 자산 수탁기관 우선협상대상자 4곳 선정
+2025-09-13 09:26:38,534 - INFO -   - 2위 (점수: 20.5): 춘해보건대 대학생 봉사단체, 치매극복 선도단체로 지정
+2025-09-13 09:26:38,534 - INFO -   - 3위 (점수: 20.4): iM증권 "美 연준, 물가보다 고용 주시…연내 3회 금리인하 가능"
+2025-09-13 09:26:38,535 - INFO -   - 4위 (점수: 19.8): 대통령실, 특검법 野 항의에 "계엄·내란은 단호히 단죄해야"
+2025-09-13 09:26:38,535 - INFO -   - 5위 (점수: 19.8): 국힘 "탄압 중단해야"…대통령실에 '특검법' 재의요구서 전달(종합)
+2025-09-13 09:26:38,535 - INFO -   - 6위 (점수: 17.4): ECB 정책금리 2연속 동결…예금금리 2.00％(종합)
+2025-09-13 09:26:38,536 - INFO -   - 7위 (점수: 17.4): [2보] ECB 예금금리 연 2.00％로 동결
+2025-09-13 09:26:38,536 - INFO -   - 8위 (점수: 17.4): [1보] ECB 금리 동결…예금금리 연 2.00％ 유지
+2025-09-13 09:26:38,536 - INFO -   - 9위 (점수: 16.8): 국힘 "정치보복의 도끼"…'與특검법 규탄' 국회서 대규모 집회
+2025-09-13 09:26:38,536 - INFO -   - 10위 (점수: 16.8): 국회 규탄대회 이어 대통령실 앞 집회…장외로 향하는 국민의힘
+2025-09-13 09:26:38,536 - INFO - 최소 30개 패러디가 나올 때까지 반복 생성... (다양성 강화)
+2025-09-13 09:26:39,144 - INFO - 현재 패턴 분포: {'exclamation': 0, 'question': 0, 'statement': 0, 'concern': 0}
+2025-09-13 09:26:44,642 - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-09-13 09:26:44,774 - INFO - ✅ 패러디 생성 성공 (1/30): 우리 연금, 은행들이 맡아준다니까?
+2025-09-13 09:26:45,361 - INFO - 현재 패턴 분포: {'exclamation': 0, 'question': 1, 'statement': 0, 'concern': 0}
+2025-09-13 09:26:51,568 - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-09-13 09:26:51,571 - INFO - ✅ 패러디 생성 성공 (2/30): 젊은이들이 치매 어르신 돌봐주네
+2025-09-13 09:26:52,273 - INFO - 현재 패턴 분포: {'exclamation': 1, 'question': 1, 'statement': 0, 'concern': 0}
+2025-09-13 09:26:58,466 - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-09-13 09:26:58,469 - INFO - ✅ 패러디 생성 성공 (3/30): 미국 금리 3번 내린다니 우리 돈도 좋아지겠네
+2025-09-13 09:26:59,177 - INFO - 현재 패턴 분포: {'exclamation': 2, 'question': 1, 'statement': 0, 'concern': 0}
+2025-09-13 09:27:04,712 - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-09-13 09:27:04,714 - INFO - ✅ 패러디 생성 성공 (4/30): 정치인들 싸움이 언제까지 계속될까
+2025-09-13 09:27:05,344 - INFO - 현재 패턴 분포: {'exclamation': 3, 'question': 1, 'statement': 0, 'concern': 0}
+2025-09-13 09:27:13,212 - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-09-13 09:27:13,215 - INFO - ✅ 패러디 생성 성공 (5/30): 여야 싸움이 계속되겠네
+2025-09-13 09:27:13,864 - INFO - 현재 패턴 분포: {'exclamation': 4, 'question': 1, 'statement': 0, 'concern': 0}
+2025-09-13 09:27:18,998 - INFO - 사용자에 의해 프로그램이 중단되었습니다.
