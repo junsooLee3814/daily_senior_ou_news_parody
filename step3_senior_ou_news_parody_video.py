@@ -74,6 +74,32 @@ FINAL_VIDEO_PATH = os.path.join(VIDEO_OUT_DIR, f'senior_ou_news_parody_{now_str}
 os.makedirs(VIDEO_OUT_DIR, exist_ok=True)
 os.makedirs(SINGLE_CLIP_DIR, exist_ok=True)
 
+def find_ffmpeg():
+    """FFmpeg 실행 파일을 찾습니다."""
+    possible_paths = [
+        "ffmpeg",  # PATH에 있는 경우
+        r"C:\ffmpeg\bin\ffmpeg.exe",
+        r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
+        r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe",
+        os.path.expanduser(r"~\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.0-full_build\bin\ffmpeg.exe"),
+    ]
+    
+    for path in possible_paths:
+        try:
+            if path == "ffmpeg":
+                # PATH에서 찾기
+                result = subprocess.run([path, "-version"], capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    return path
+            else:
+                # 전체 경로로 찾기
+                if os.path.exists(path):
+                    return path
+        except:
+            continue
+    
+    return None
+
 def create_intro_video(img_path, out_path, duration):
     """인트로 이미지를 사용하여 줌 효과가 적용된 비디오 클립을 생성합니다."""
     if not os.path.exists(img_path):
@@ -81,8 +107,15 @@ def create_intro_video(img_path, out_path, duration):
         return None
 
     print("1. 인트로 영상 제작 중...", flush=True)
+    
+    # FFmpeg 경로 찾기
+    ffmpeg_path = find_ffmpeg()
+    if not ffmpeg_path:
+        print("[오류] FFmpeg를 찾을 수 없습니다. FFmpeg가 설치되어 있는지 확인하세요.", flush=True)
+        return None
+    
     cmd = [
-        "ffmpeg", "-y", "-loop", "1", "-i", img_path,
+        ffmpeg_path, "-y", "-loop", "1", "-i", img_path,
         "-t", str(duration),
         "-vf", f"zoompan=z='min(zoom+0.001,1.05)':d={duration*25}:s={WIDTH}x{HEIGHT}",
         "-c:v", "libx264", "-pix_fmt", "yuv420p", out_path
@@ -101,10 +134,16 @@ def create_card_videos(card_img_paths, duration):
     total_cards = len(card_img_paths)
     print(f"2. 총 {total_cards}개의 카드 이미지로 영상 제작 중...", flush=True)
 
+    # FFmpeg 경로 찾기
+    ffmpeg_path = find_ffmpeg()
+    if not ffmpeg_path:
+        print("[오류] FFmpeg를 찾을 수 없습니다. FFmpeg가 설치되어 있는지 확인하세요.", flush=True)
+        return []
+
     for idx, img_path in enumerate(card_img_paths):
         out_path = os.path.join(SINGLE_CLIP_DIR, f'card_{idx+1:02d}_{now_str}.mp4')
         cmd = [
-            "ffmpeg", "-y", "-loop", "1", "-i", img_path,
+            ffmpeg_path, "-y", "-loop", "1", "-i", img_path,
             "-t", str(duration),
             "-vf", f"zoompan=z='min(zoom+0.001,1.05)':d={duration*25}:s={WIDTH}x{HEIGHT}",
             "-c:v", "libx264", "-pix_fmt", "yuv420p", out_path
@@ -121,13 +160,20 @@ def create_card_videos(card_img_paths, duration):
 def merge_videos(video_paths, out_path):
     """생성된 모든 비디오 클립을 하나로 합칩니다."""
     print("3. 모든 영상 클립 합치는 중...", flush=True)
+    
+    # FFmpeg 경로 찾기
+    ffmpeg_path = find_ffmpeg()
+    if not ffmpeg_path:
+        print("[오류] FFmpeg를 찾을 수 없습니다. FFmpeg가 설치되어 있는지 확인하세요.", flush=True)
+        return
+    
     list_file_path = os.path.join(BASE_DIR, "video_list.txt")
     with open(list_file_path, "w", encoding="utf-8") as f:
         for v_path in video_paths:
             f.write(f"file '{os.path.abspath(v_path)}'\n")
 
     cmd = [
-        "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+        ffmpeg_path, "-y", "-f", "concat", "-safe", "0",
         "-i", list_file_path, "-c", "copy", out_path
     ]
     try:
@@ -148,8 +194,17 @@ def add_background_music(video_path, bgm_path, out_path, total_duration):
         return
 
     print("4. 배경음악 추가 중 (페이드인/아웃 적용)...", flush=True)
+    
+    # FFmpeg 경로 찾기
+    ffmpeg_path = find_ffmpeg()
+    if not ffmpeg_path:
+        print("[오류] FFmpeg를 찾을 수 없습니다. FFmpeg가 설치되어 있는지 확인하세요.", flush=True)
+        # FFmpeg 없이 파일 복사
+        shutil.copy(video_path, out_path)
+        return
+    
     cmd = [
-        "ffmpeg", "-y", "-i", video_path,
+        ffmpeg_path, "-y", "-i", video_path,
         "-stream_loop", "-1", "-i", bgm_path,
         "-filter_complex", f"[1:a]volume=0.4,afade=t=in:st=0:d=1,afade=t=out:st={total_duration-1}:d=1[a]",
         "-map", "0:v", "-map", "[a]",
@@ -233,7 +288,7 @@ if __name__ == "__main__":
                 temp_dirs=[SINGLE_CLIP_DIR],
                 temp_files=[MERGED_CLIP_PATH]
             )
-            print(f"\n🎉 모든 작업 완료! 최종 영상은 다음 경로에 저장되었습니다:\n{FINAL_VIDEO_PATH}", flush=True)
+            print(f"\n[완료] 모든 작업 완료! 최종 영상은 다음 경로에 저장되었습니다:\n{FINAL_VIDEO_PATH}", flush=True)
 
             # --- 최신 mp4 파일 1개만 남기고 나머지 삭제 ---
             mp4_files = [f for f in glob.glob(os.path.join(VIDEO_OUT_DIR, '*.mp4')) if 'single_clips' not in os.path.dirname(f)]

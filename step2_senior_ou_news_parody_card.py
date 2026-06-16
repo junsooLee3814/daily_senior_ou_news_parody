@@ -65,10 +65,10 @@ FONT_BOLD_PATH = SCRIPT_DIR / "asset" / "Pretendard-Bold.otf"
 def load_font(path, size):
     try:
         font = ImageFont.truetype(str(path), size)
-        print(f"✅ 폰트 로드 성공: {path.name} (크기: {size})", flush=True)
+        print(f"[OK] 폰트 로드 성공: {path.name} (크기: {size})", flush=True)
         return font
     except Exception as e:
-        print(f"❌ 폰트 로드 실패 ({path.name}): {e}", flush=True)
+        print(f"[ERROR] 폰트 로드 실패 ({path.name}): {e}", flush=True)
         return ImageFont.load_default()
 
 # 폰트 로드
@@ -164,9 +164,9 @@ try:
     worksheet = spreadsheet.worksheet(WRITE_SHEET_NAME)
     data = worksheet.get_all_records()
     df = pd.DataFrame(data)
-    print(f"✅ 구글 시트에서 전체 데이터 로드 완료. 총 {len(df)}개.", flush=True)
+    print(f"[OK] 구글 시트에서 전체 데이터 로드 완료. 총 {len(df)}개.", flush=True)
 except Exception as e:
-    print(f"❌ 구글 시트 데이터 로드 실패: {e}", flush=True)
+    print(f"[ERROR] 구글 시트 데이터 로드 실패: {e}", flush=True)
     df = pd.DataFrame()
 
 if df.empty:
@@ -215,7 +215,7 @@ for i, (idx, row) in enumerate(df.iterrows()):
     # 배경 이미지 로드
     background_path = SCRIPT_DIR / "asset" / bg_image_name
     if not background_path.exists():
-        print(f"❌ 배경 이미지 없음: {background_path}, 다음 카드로 건너뜁니다.", flush=True)
+        print(f"[ERROR] 배경 이미지 없음: {background_path}, 다음 카드로 건너뜁니다.", flush=True)
         continue
     
     card = Image.open(background_path).convert("RGBA")
@@ -269,6 +269,6 @@ for i, (idx, row) in enumerate(df.iterrows()):
     # 카드 저장
     out_path = output_dir / f'parody_card_{card_index+1:02d}.png'
     card.save(out_path)
-    print(f"✅ 카드 저장 완료: {out_path}", flush=True)
+    print(f"[OK] 카드 저장 완료: {out_path}", flush=True)
 
 print("\n6. 작업 완료!", flush=True) 

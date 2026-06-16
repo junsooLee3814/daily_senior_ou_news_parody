@@ -10,6 +10,9 @@ https://www.yna.co.kr/rss/local.xml
 [패러디디저장_스프레드시트_ID]
 패러디결과_스프레드시트_ID: 1yZeYdyGZpR6yrRn5JNa1-JdQtO9vKLX6NPWhqpmT6kw
 
+[구글드라이브]
+패러디_저장_폴더_ID: 1jxTpQLAaCVnaCl-CzNdmozfOFzLhvoi0
+
 [카드뉴스개수]
 카드뉴스_개수: 30
 

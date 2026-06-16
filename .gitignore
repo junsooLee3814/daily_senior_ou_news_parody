@@ -6,6 +6,8 @@
 credentials.json
 client_secrets.json
 token.json
+drive_token.json
+config/drive_token.json
 service_account.json
 google_service_account.json
 *-service-account.json

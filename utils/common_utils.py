@@ -16,7 +16,7 @@ SCOPE = [
     "https://www.googleapis.com/auth/drive.file",
     "https://www.googleapis.com/auth/drive",
 ]
-CREDS_FILE = "service_account.json"
+CREDS_FILE = "config/service_account.json"
 
 def get_kst_now():
     """한국 표준시(KST) 기준의 현재 시간을 반환합니다."""

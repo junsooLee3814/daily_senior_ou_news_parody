@@ -68,6 +68,9 @@ try:
     import gspread
     import pandas as pd
     from concurrent.futures import ThreadPoolExecutor, as_completed
+    from google.oauth2.service_account import Credentials
+    from googleapiclient.discovery import build
+    from googleapiclient.errors import HttpError
     
     # newspaper3k 패키지 import (아나콘다 환경 대응)
     try:
@@ -624,7 +627,7 @@ def create_senior_parody_with_claude(news_item: Dict[str, Any], existing_titles:
     for attempt in range(max_retries):
         try:
             response = client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=2000,  # 1500에서 2000으로 증가
                 temperature=0.9,  # 0.8에서 0.9로 증가 - 더 다양한 표현 유도
                 messages=messages  # type: ignore
@@ -671,6 +674,217 @@ def create_senior_parody_with_claude(news_item: Dict[str, Any], existing_titles:
             logger.error(f"Claude AI 요청 중 예상치 못한 오류 발생: {e}")
             return ""
     return ""
+
+def get_drive_service():
+    """Google Drive API 서비스를 생성하고 반환합니다. (개인 OAuth 계정)"""
+    try:
+        from utils.google_oauth import get_drive_oauth_credentials
+        creds = get_drive_oauth_credentials()
+        drive_service = build('drive', 'v3', credentials=creds)
+        return drive_service
+    except Exception as e:
+        logger.error(f"Google Drive API 서비스 생성 실패: {e}")
+        return None
+
+def get_docs_service():
+    """Google Docs API 서비스를 생성하고 반환합니다. (개인 OAuth 계정)"""
+    try:
+        from utils.google_oauth import get_drive_oauth_credentials
+        creds = get_drive_oauth_credentials()
+        docs_service = build('docs', 'v1', credentials=creds)
+        return docs_service
+    except Exception as e:
+        logger.error(f"Google Docs API 서비스 생성 실패: {e}")
+        return None
+
+def find_or_create_folder(drive_service, folder_name: str, parent_folder_id: str = None) -> Optional[str]:
+    """구글 드라이브에서 폴더를 찾거나 생성합니다."""
+    try:
+        # 먼저 폴더 검색
+        query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+        if parent_folder_id:
+            query += f" and '{parent_folder_id}' in parents"
+        else:
+            query += " and 'root' in parents"
+        
+        results = drive_service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+        items = results.get('files', [])
+        
+        if items:
+            folder_id = items[0]['id']
+            logger.info(f"폴더 '{folder_name}' 찾음 (ID: {folder_id})")
+            return folder_id
+        else:
+            # 폴더가 없으면 생성
+            folder_metadata = {
+                'name': folder_name,
+                'mimeType': 'application/vnd.google-apps.folder'
+            }
+            if parent_folder_id:
+                folder_metadata['parents'] = [parent_folder_id]
+            
+            folder = drive_service.files().create(body=folder_metadata, fields='id').execute()
+            folder_id = folder.get('id')
+            logger.info(f"폴더 '{folder_name}' 생성 완료 (ID: {folder_id})")
+            return folder_id
+    except Exception as e:
+        logger.error(f"폴더 찾기/생성 중 오류 발생: {e}")
+        return None
+
+def delete_old_parody_files(drive_service, folder_id: str, current_date_str: str):
+    """이전 날짜의 패러디 파일을 삭제합니다."""
+    try:
+        # 현재 날짜와 다른 날짜의 파일 찾기
+        query = f"'{folder_id}' in parents and name contains '_sinior_parody' and trashed=false"
+        results = drive_service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+        items = results.get('files', [])
+        
+        logger.info(f"이전 파일 검색 결과: {len(items)}개 파일 발견")
+        
+        deleted_count = 0
+        for item in items:
+            file_name = item['name']
+            # 현재 날짜가 포함되지 않은 파일 삭제
+            if current_date_str not in file_name:
+                try:
+                    drive_service.files().delete(fileId=item['id']).execute()
+                    logger.info(f"이전 파일 삭제: {file_name}")
+                    deleted_count += 1
+                except HttpError as e:
+                    if 'storageQuotaExceeded' in str(e):
+                        logger.error(f"❌ 파일 삭제 중 할당량 초과 에러 발생: {file_name}")
+                        logger.error("   할당량이 초과되어 파일 삭제도 불가능합니다.")
+                        logger.error("   Google Drive에서 수동으로 파일을 삭제하거나 공간을 확보하세요.")
+                        # 할당량 초과 시 더 이상 삭제 시도하지 않음
+                        break
+                    else:
+                        logger.warning(f"파일 삭제 실패 ({file_name}): {e}")
+                except Exception as e:
+                    logger.warning(f"파일 삭제 실패 ({file_name}): {e}")
+        
+        if deleted_count > 0:
+            logger.info(f"총 {deleted_count}개의 이전 파일을 삭제했습니다.")
+        else:
+            logger.info("삭제할 이전 파일이 없습니다.")
+    except HttpError as e:
+        if 'storageQuotaExceeded' in str(e):
+            logger.error("❌ 이전 파일 검색 중 할당량 초과 에러 발생!")
+            logger.error("   Google Drive 할당량이 초과되어 파일 목록 조회도 불가능합니다.")
+        else:
+            logger.error(f"이전 파일 삭제 중 HTTP 오류 발생: {e}")
+    except Exception as e:
+        logger.error(f"이전 파일 삭제 중 오류 발생: {e}")
+
+def create_table_in_docs(docs_service, document_id: str, headers: List[str], rows: List[List[str]]):
+    """Google Docs 문서에 표를 생성합니다."""
+    try:
+        # 문서 구조 확인
+        doc = docs_service.documents().get(documentId=document_id).execute()
+        body = doc.get('body', {})
+        content = body.get('content', [])
+        
+        # 문서 끝 인덱스 찾기
+        end_index = 1
+        if content:
+            for element in content:
+                if 'endIndex' in element:
+                    end_index = max(end_index, element['endIndex'])
+        
+        # 표 삽입 위치 (문서 끝)
+        table_insert_index = end_index - 1
+        
+        # 표 삽입 (헤더 + 데이터 행)
+        num_rows = len(rows) + 1  # 헤더 포함
+        num_cols = len(headers)
+        
+        # 1. 표 삽입
+        insert_table_request = {
+            'insertTable': {
+                'location': {'index': table_insert_index},
+                'rows': num_rows,
+                'columns': num_cols
+            }
+        }
+        
+        docs_service.documents().batchUpdate(
+            documentId=document_id,
+            body={'requests': [insert_table_request]}
+        ).execute()
+        
+        # 2. 표 삽입 후 문서 다시 읽어서 표 위치 확인
+        time.sleep(0.3)  # 표 삽입 완료 대기
+        doc = docs_service.documents().get(documentId=document_id).execute()
+        body = doc.get('body', {})
+        content = body.get('content', [])
+        
+        # 표 찾기
+        table_start_index = None
+        for element in content:
+            if 'table' in element:
+                table = element.get('table', {})
+                if 'tableRows' in table:
+                    table_start_index = element.get('startIndex', 1)
+                    break
+        
+        if not table_start_index:
+            logger.warning("표를 찾을 수 없습니다. 텍스트만 추가합니다.")
+            return
+        
+        # 3. 표 셀에 데이터 입력
+        requests = []
+        
+        # 헤더 입력
+        for col_idx, header in enumerate(headers):
+            cell_text_request = {
+                'insertText': {
+                    'location': {
+                        'tableCellLocation': {
+                            'tableStartLocation': {'index': table_start_index},
+                            'rowIndex': 0,
+                            'columnIndex': col_idx
+                        },
+                        'index': 1
+                    },
+                    'text': str(header)
+                }
+            }
+            requests.append(cell_text_request)
+        
+        # 데이터 행 입력
+        for row_idx, row in enumerate(rows, start=1):
+            for col_idx, cell_value in enumerate(row):
+                cell_text_request = {
+                    'insertText': {
+                        'location': {
+                            'tableCellLocation': {
+                                'tableStartLocation': {'index': table_start_index},
+                                'rowIndex': row_idx,
+                                'columnIndex': col_idx
+                            },
+                            'index': 1
+                        },
+                        'text': str(cell_value)
+                    }
+                }
+                requests.append(cell_text_request)
+        
+        # 배치로 텍스트 입력 (한 번에 최대 100개 요청)
+        batch_size = 100
+        for i in range(0, len(requests), batch_size):
+            batch = requests[i:i + batch_size]
+            docs_service.documents().batchUpdate(
+                documentId=document_id,
+                body={'requests': batch}
+            ).execute()
+            if i + batch_size < len(requests):
+                time.sleep(0.2)  # API 제한 방지
+        
+        logger.info(f"표 생성 완료: {num_rows}행 x {num_cols}열")
+    except Exception as e:
+        logger.error(f"표 생성 중 오류 발생: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise
 
 def save_results_to_gsheet(client, parody_data_list: List[Dict[str, Any]], spreadsheet_id: str, worksheet_name: str):
     """생성된 패러디 결과를 구글 시트에 저장합니다. (이전 기록 삭제 후 새로 기록)"""
@@ -722,6 +936,188 @@ def save_results_to_gsheet(client, parody_data_list: List[Dict[str, Any]], sprea
 
     except Exception as e:
         logger.error(f"구글 시트 저장 중 오류 발생: {e}")
+
+def check_drive_quota(drive_service):
+    """Google Drive 할당량을 확인합니다. (서비스 계정의 할당량 확인)"""
+    try:
+        about = drive_service.about().get(fields='storageQuota,user').execute()
+        quota = about.get('storageQuota', {})
+        user_info = about.get('user', {})
+        
+        logger.info(f"서비스 계정 정보: {user_info.get('emailAddress', '알 수 없음')}")
+        logger.debug(f"할당량 정보 원본: {quota}")
+        
+        if 'limit' in quota and 'usage' in quota:
+            limit = int(quota.get('limit', 0))
+            usage = int(quota.get('usage', 0))
+            usage_in_drive = int(quota.get('usageInDrive', 0))
+            
+            if limit > 0:
+                usage_percent = (usage / limit) * 100
+                # 바이트를 GB로 변환
+                limit_gb = limit / (1024 ** 3)
+                usage_gb = usage / (1024 ** 3)
+                logger.info(f"서비스 계정 Drive 할당량: {usage_percent:.1f}% 사용 중 ({usage_gb:.2f}GB / {limit_gb:.2f}GB)")
+                
+                if usage_percent >= 100:
+                    logger.error("❌ 서비스 계정의 Google Drive 할당량이 100% 초과되었습니다!")
+                    logger.error("   ⚠️ 중요: 서비스 계정의 Drive 할당량은 사용자 계정과 별도입니다!")
+                    logger.error("   해결 방법:")
+                    logger.error("   1. 서비스 계정의 Drive에서 파일 삭제")
+                    logger.error("   2. 서비스 계정 Drive의 휴지통 비우기")
+                    logger.error("   3. 또는 서비스 계정이 사용자 Drive에 직접 접근하도록 권한 설정")
+                    return False
+                elif usage_percent >= 95:
+                    logger.warning(f"⚠️ 서비스 계정 Drive 할당량이 {usage_percent:.1f}%로 거의 가득 찼습니다!")
+                    return False
+            else:
+                logger.warning("할당량 제한 정보를 가져올 수 없습니다 (limit이 0입니다).")
+                logger.warning("   서비스 계정의 기본 할당량은 15GB입니다.")
+        else:
+            logger.warning(f"할당량 정보를 가져올 수 없습니다. quota 데이터: {quota}")
+            logger.warning("   서비스 계정의 기본 할당량은 15GB입니다.")
+            # 할당량 정보가 없어도 계속 진행 시도
+        
+        return True
+    except HttpError as e:
+        error_str = str(e)
+        if 'storageQuotaExceeded' in error_str:
+            logger.error("❌ 서비스 계정의 Google Drive 할당량이 초과되었습니다!")
+            logger.error("   ⚠️ 중요: 서비스 계정의 Drive 할당량은 사용자 계정(5.7GB/2TB)과 별도입니다!")
+            logger.error("   서비스 계정의 기본 할당량은 15GB이며, 별도로 관리됩니다.")
+            logger.error("   해결 방법:")
+            logger.error("   1. 서비스 계정의 Drive에서 파일 삭제")
+            logger.error("      - Google Cloud Console에서 서비스 계정 확인")
+            logger.error("      - 또는 코드로 서비스 계정 Drive의 파일 삭제")
+            logger.error("   2. 서비스 계정 Drive의 휴지통 비우기")
+            logger.error("   3. 서비스 계정이 사용자 Drive에 직접 접근하도록 권한 설정")
+            return False
+        else:
+            logger.warning(f"할당량 확인 중 HTTP 오류 발생: {e}")
+            logger.warning("   할당량 확인을 건너뛰고 계속 진행합니다.")
+            return True  # 확인 실패해도 계속 진행
+    except Exception as e:
+        logger.warning(f"할당량 확인 중 예상치 못한 오류: {e}")
+        logger.warning("   할당량 확인을 건너뛰고 계속 진행합니다.")
+        return True  # 확인 실패해도 계속 진행
+
+def save_results_to_drive_docs(parody_data_list: List[Dict[str, Any]], folder_id: Optional[str] = None):
+    """생성된 패러디 결과를 구글 독스 파일로 저장합니다. (개인 OAuth 계정)"""
+    try:
+        drive_service = get_drive_service()
+        docs_service = get_docs_service()
+        
+        if not drive_service or not docs_service:
+            logger.error("Google Drive/Docs API 서비스 생성 실패")
+            return
+        
+        logger.info("개인 구글 계정(OAuth)으로 Google Drive에 저장합니다.")
+        
+        # 날짜 형식: 2026_01_18
+        today = get_kst_now()
+        date_str = today.strftime('%Y_%m_%d')
+        file_name = f"{date_str}_sinior_parody"
+        
+        if folder_id:
+            stock_parody_folder_id = folder_id
+            logger.info(f"설정된 저장 폴더 ID 사용: {stock_parody_folder_id}")
+        else:
+            my_drive_folder_id = find_or_create_folder(drive_service, '내문서함')
+            if not my_drive_folder_id:
+                logger.error("'내문서함' 폴더를 찾거나 생성할 수 없습니다.")
+                return
+            
+            stock_parody_folder_id = find_or_create_folder(drive_service, 'stock_parody', my_drive_folder_id)
+            if not stock_parody_folder_id:
+                logger.error("'stock_parody' 폴더를 찾거나 생성할 수 없습니다.")
+                return
+        
+        logger.info("이전 날짜 패러디 파일 삭제 중...")
+        delete_old_parody_files(drive_service, stock_parody_folder_id, date_str)
+        
+        # 4. Google Docs 파일 생성
+        file_metadata = {
+            'name': file_name,
+            'mimeType': 'application/vnd.google-apps.document',
+            'parents': [stock_parody_folder_id]
+        }
+        
+        try:
+            file = drive_service.files().create(body=file_metadata, fields='id').execute()
+            document_id = file.get('id')
+            logger.info(f"Google Docs 파일 생성 완료: {file_name} (ID: {document_id})")
+        except HttpError as e:
+            error_str = str(e)
+            if 'storageQuotaExceeded' in error_str:
+                logger.error("개인 구글 계정 Drive 할당량 초과로 파일을 생성할 수 없습니다!")
+                logger.error("   Google Drive에서 불필요한 파일을 삭제하거나 저장 공간을 확보하세요.")
+                return
+            else:
+                logger.error(f"파일 생성 중 HTTP 오류 발생: {e}")
+                raise
+        
+        # 5. 표 데이터 준비
+        headers = ['today', 'ou_title', 'original_title', 'latte', 'ou_think', 'disclaimer', 'source_url', 'article_content']
+        today_str = get_kst_now().strftime('%Y-%m-%d, %a').lower()
+        
+        rows = []
+        for p_data in parody_data_list:
+            source_url = p_data.get('original_link', p_data.get('url', ''))
+            article_content = p_data.get('text', '')[:1000] if p_data.get('text') else ''
+            row = [
+                today_str,
+                p_data.get('ou_title', ''),
+                p_data.get('original_title', ''),
+                p_data.get('latte', ''),
+                p_data.get('ou_think', ''),
+                DISCLAIMER,
+                source_url,
+                article_content
+            ]
+            rows.append(row)
+        
+        # 6. 제목 추가 및 표 생성
+        # Google Docs는 빈 문서에 바로 표를 삽입할 수 없으므로, 먼저 제목을 추가
+        title_text = f"시니어 뉴스 패러디 - {today.strftime('%Y년 %m월 %d일')}\n\n"
+        docs_service.documents().batchUpdate(
+            documentId=document_id,
+            body={
+                'requests': [{
+                    'insertText': {
+                        'location': {'index': 1},
+                        'text': title_text
+                    }
+                }]
+            }
+        ).execute()
+        
+        # 표 생성 및 데이터 입력
+        if rows:
+            # 제목이 추가된 후 인덱스가 변경되었으므로 잠시 대기
+            time.sleep(0.5)
+            create_table_in_docs(docs_service, document_id, headers, rows)
+        
+        logger.info(f"구글 독스 파일 저장 완료: {file_name} ({len(parody_data_list)}개 항목)")
+        
+    except HttpError as e:
+        error_details = str(e)
+        if 'storageQuotaExceeded' in error_details:
+            logger.error("❌ Google Drive 할당량 초과 오류 발생!")
+            logger.error("   Google Docs 파일은 거의 공간을 사용하지 않지만, 전체 Drive 할당량이 초과되었습니다.")
+            logger.error("   해결 방법:")
+            logger.error("   1. Google Drive에서 불필요한 파일 삭제")
+            logger.error("   2. 휴지통 비우기 (휴지통의 파일도 할당량을 차지합니다)")
+            logger.error("   3. Google Drive 저장 공간 확장 (Google One 구독)")
+            logger.error("   4. 이전 패러디 파일들을 수동으로 삭제")
+            logger.error("   참고: Google Docs 파일은 실제로 거의 공간을 사용하지 않습니다.")
+        else:
+            logger.error(f"구글 독스 파일 저장 중 HTTP 오류 발생: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+    except Exception as e:
+        logger.error(f"구글 독스 파일 저장 중 오류 발생: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
 
 def main():
     """메인 실행 함수 - 다양성 강화 로직 포함"""
@@ -856,6 +1252,16 @@ def main():
             save_results_to_gsheet(g_client, parody_results, config['패러디결과_스프레드시트_ID'], WRITE_SHEET_NAME)
         except Exception as e:
             logger.error(f"구글 인증 또는 시트 저장에 실패했습니다: {e}")
+
+        # 5-1. 구글 독스 파일로도 저장 (내문서함/stock_parody/{일자}_sinior_parody)
+        logger.info("생성된 패러디 결과를 구글 독스 파일로 저장 중...")
+        try:
+            save_results_to_drive_docs(
+                parody_results,
+                config.get('패러디_저장_폴더_ID'),
+            )
+        except Exception as e:
+            logger.error(f"구글 독스 파일 저장에 실패했습니다: {e}")
 
         # 6. 캐시 통계 출력
         logger.info(f"캐시 통계: 히트 {_cache_hits}회, 미스 {_cache_misses}회")
