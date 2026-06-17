@@ -36,7 +36,9 @@ jobs:
       - name: 🔑 Création du fichier d'informations d'identification Google
         env:
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
-        run: echo "$GOOGLE_CREDENTIALS_JSON" > service_account.json
+        run: |
+          mkdir -p config
+          echo "$GOOGLE_CREDENTIALS_JSON" > config/service_account.json
 
       - name: 🎯 Exécution de la génération de la vidéo parodique Senior News
         env:
