@@ -811,62 +811,61 @@ def create_table_in_docs(docs_service, document_id: str, headers: List[str], row
             body={'requests': [insert_table_request]}
         ).execute()
         
-        # 2. 표 삽입 후 문서 다시 읽어서 표 위치 확인
+        # 2. 표 삽입 후 문서 다시 읽어서 표 구조 확인
         time.sleep(0.3)  # 표 삽입 완료 대기
         doc = docs_service.documents().get(documentId=document_id).execute()
         body = doc.get('body', {})
         content = body.get('content', [])
         
-        # 표 찾기
-        table_start_index = None
+        # 표 요소 찾기
+        table_element = None
         for element in content:
             if 'table' in element:
-                table = element.get('table', {})
-                if 'tableRows' in table:
-                    table_start_index = element.get('startIndex', 1)
-                    break
+                table_element = element
+                break
         
-        if not table_start_index:
+        if not table_element:
             logger.warning("표를 찾을 수 없습니다. 텍스트만 추가합니다.")
             return
         
-        # 3. 표 셀에 데이터 입력
-        requests = []
+        # 3. 각 셀의 삽입 인덱스와 입력할 텍스트를 수집
+        # insertText는 tableCellLocation을 지원하지 않으므로, 셀 내부 문단의
+        # 실제 시작 인덱스를 계산해 사용한다.
+        all_rows_values = [list(headers)] + [list(r) for r in rows]
+        table_rows = table_element.get('table', {}).get('tableRows', [])
         
-        # 헤더 입력
-        for col_idx, header in enumerate(headers):
-            cell_text_request = {
+        cell_inserts = []  # (insert_index, text)
+        for row_idx, table_row in enumerate(table_rows):
+            if row_idx >= len(all_rows_values):
+                break
+            cells = table_row.get('tableCells', [])
+            for col_idx, cell in enumerate(cells):
+                if col_idx >= len(all_rows_values[row_idx]):
+                    break
+                cell_value = all_rows_values[row_idx][col_idx]
+                if cell_value is None or str(cell_value) == '':
+                    continue
+                cell_content = cell.get('content', [])
+                if not cell_content:
+                    continue
+                # 셀 내 첫 문단의 시작 인덱스(빈 셀의 삽입 위치)
+                insert_index = cell_content[0].get('startIndex')
+                if insert_index is None:
+                    continue
+                cell_inserts.append((insert_index, str(cell_value)))
+        
+        # 인덱스가 큰 셀부터(역순) 삽입해야 앞쪽 인덱스가 밀리지 않는다.
+        cell_inserts.sort(key=lambda x: x[0], reverse=True)
+        
+        requests = [
+            {
                 'insertText': {
-                    'location': {
-                        'tableCellLocation': {
-                            'tableStartLocation': {'index': table_start_index},
-                            'rowIndex': 0,
-                            'columnIndex': col_idx
-                        },
-                        'index': 1
-                    },
-                    'text': str(header)
+                    'location': {'index': insert_index},
+                    'text': text
                 }
             }
-            requests.append(cell_text_request)
-        
-        # 데이터 행 입력
-        for row_idx, row in enumerate(rows, start=1):
-            for col_idx, cell_value in enumerate(row):
-                cell_text_request = {
-                    'insertText': {
-                        'location': {
-                            'tableCellLocation': {
-                                'tableStartLocation': {'index': table_start_index},
-                                'rowIndex': row_idx,
-                                'columnIndex': col_idx
-                            },
-                            'index': 1
-                        },
-                        'text': str(cell_value)
-                    }
-                }
-                requests.append(cell_text_request)
+            for insert_index, text in cell_inserts
+        ]
         
         # 배치로 텍스트 입력 (한 번에 최대 100개 요청)
         batch_size = 100
